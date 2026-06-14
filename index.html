@@ -752,7 +752,7 @@ LEGISLACIÓN APLICABLE:
 RIESGOS CRÍTICOS: fianza >2 meses, prohibición mascotas sin base, penalización >1 mes, desahucio inmediato, gastos ocultos sin detallar
 RIESGOS MODERADOS: duración <3 meses, sin inventario, incremento sin preaviso
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"LAU Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al propietario solicitando modificaciones con artículos LAU"}`
   },
   labor: {
@@ -776,7 +776,7 @@ LEGISLACIÓN APLICABLE:
 RIESGOS CRÍTICOS: periodo prueba excesivo, cláusulas de no competencia sin compensación, jornada ilegal, renuncia derechos sindicales, salario bajo convenio
 RIESGOS MODERADOS: funciones ambiguas, cláusulas de confidencialidad abusivas, ausencia de plus teletrabajo
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"ET Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} a RRHH solicitando modificaciones con artículos ET"}`
   },
   freelance: {
@@ -797,7 +797,7 @@ LEGISLACIÓN APLICABLE:
 RIESGOS CRÍTICOS: cesión total derechos PI sin compensación, cláusulas de exclusividad sin retribución, pagos aplazados indefinidos, propiedad intelectual del cliente sobre todo el trabajo
 RIESGOS MODERADOS: plazos de pago >60 días, penalizaciones asimétricas, cláusulas de confidencialidad perpetua, ausencia de acuerdo de alcance
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"Código Civil Art. XX / LPI Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al cliente solicitando modificaciones"}`
   },
   purchase: {
@@ -818,7 +818,7 @@ LEGISLACIÓN APLICABLE:
 RIESGOS CRÍTICOS: exclusión de vicios ocultos, cláusulas de no responsabilidad totales, precio aplazado sin garantías, resolución unilateral injustificada
 RIESGOS MODERADOS: arras sin especificar tipo (confirmatorias/penitenciales/penales), ausencia de condiciones suspensivas, gastos mal distribuidos
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"CC Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al vendedor solicitando modificaciones"}`
   },
   mortgage: {
@@ -841,7 +841,7 @@ LEGISLACIÓN APLICABLE:
 RIESGOS CRÍTICOS: cláusula suelo, intereses demora >3x legal, vencimiento anticipado abusivo, gastos todos al prestatario, comisiones de apertura desproporcionadas
 RIESGOS MODERADOS: tipo variable sin CAP, seguros vinculados obligatorios, falta de FEIN o FIAE
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"LCCI Art. XX / STS XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al banco solicitando modificaciones o nulidad de cláusulas"}`
   },
   nda: {
@@ -862,7 +862,7 @@ LEGISLACIÓN APLICABLE:
 RIESGOS CRÍTICOS: duración indefinida sin límite, definición de "información confidencial" excesivamente amplia, penalizaciones desproporcionadas, restricciones geográficas abusivas
 RIESGOS MODERADOS: ausencia de excepciones (información pública, conocida previamente), ley aplicable desfavorable, tribunales en jurisdicción lejana
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"Ley 1/2019 Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} solicitando modificaciones al NDA"}`
   },
   business: {
@@ -883,7 +883,7 @@ LEGISLACIÓN APLICABLE:
 RIESGOS CRÍTICOS: cláusulas drag-along sin contraprestación justa, dilución sin aprobación, derechos de veto abusivos, ausencia de mecanismo de salida, distribución de dividendos arbitraria
 RIESGOS MODERADOS: ausencia de pacto deadlock, valoración de participaciones no definida, restricciones excesivas transmisión
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"LSC Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} a los socios solicitando modificaciones"}`
   },
   other: {
@@ -903,7 +903,7 @@ ANÁLISIS GENERAL basado en:
 
 BUSCA SIEMPRE: cláusulas abusivas, desequilibrio en las partes, limitaciones de responsabilidad excesivas, penalizaciones desproporcionadas, obligaciones unilaterales, falta de transparencia, plazos abusivos, jurisdicción desfavorable
 
-Responde en ${lang}. SOLO JSON sin markdown:
+Responde en ${lang}. CRÍTICO: Responde SOLO con el objeto JSON. CERO texto antes o después. CERO markdown. CERO explicaciones. Solo el JSON puro:
 {"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"CC Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} solicitando modificaciones al contrato"}`
   }
 };
@@ -1153,9 +1153,9 @@ async function callClaude(text, lang, system) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 3500,
+      max_tokens: 4000,
       system,
-      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}:\n\n${text.substring(0, 8000)}` }]
+      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.\n\nContrato:\n${text.substring(0, 7000)}` }]
     })
   });
 
@@ -1165,12 +1165,35 @@ async function callClaude(text, lang, system) {
   }
 
   const data = await resp.json();
-  const raw = data.content?.[0]?.text || '';
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Sin respuesta JSON de la IA');
+  const raw = (data.content?.[0]?.text || '').trim();
 
-  try { return JSON.parse(match[0]); }
-  catch(e) { throw new Error('Error parseando respuesta de la IA'); }
+  if (!raw) throw new Error('La IA no devolvió respuesta. Inténtalo de nuevo.');
+
+  // Intento 1: JSON directo
+  try { return JSON.parse(raw); } catch(_) {}
+
+  // Intento 2: extraer primer bloque JSON con balance de llaves
+  try {
+    const start = raw.indexOf('{');
+    if (start !== -1) {
+      let depth = 0, end = -1;
+      for (let i = start; i < raw.length; i++) {
+        if (raw[i] === '{') depth++;
+        else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end !== -1) return JSON.parse(raw.substring(start, end + 1));
+    }
+  } catch(_) {}
+
+  // Intento 3: regex
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) return JSON.parse(match[0]);
+  } catch(_) {}
+
+  // Si todo falla, mostrar los primeros caracteres para depurar
+  console.error('Respuesta raw de Claude:', raw.substring(0, 500));
+  throw new Error('No se pudo parsear la respuesta. La IA respondió: ' + raw.substring(0, 100));
 }
 
 // ===== RENDER =====
