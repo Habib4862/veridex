@@ -494,6 +494,83 @@ textarea::placeholder { color: var(--text3); }
 .admin-input:focus { border-color: rgba(16,185,129,0.3); color: var(--accent); }
 .admin-input::placeholder { letter-spacing: 0; color: var(--text3); }
 
+
+/* ===== FEEDBACK ===== */
+.feedback-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 20px;
+  margin-top: 24px;
+  margin-bottom: 8px;
+}
+.feedback-q {
+  font-size: 16px; font-weight: 700; color: var(--text);
+  text-align: center; margin-bottom: 6px;
+}
+.feedback-sub {
+  font-size: 12px; color: var(--text2);
+  text-align: center; margin-bottom: 18px;
+}
+.emoji-row {
+  display: flex; justify-content: center; gap: 8px; margin-bottom: 18px;
+}
+.emoji-btn {
+  width: 56px; height: 56px;
+  background: var(--surface2);
+  border: 2px solid var(--border);
+  border-radius: 14px;
+  font-size: 26px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.emoji-btn:hover { transform: scale(1.1); border-color: var(--text2); }
+.emoji-btn.selected {
+  border-color: var(--accent);
+  background: rgba(16,185,129,0.12);
+  transform: scale(1.15);
+  box-shadow: 0 0 16px rgba(16,185,129,0.3);
+}
+.feedback-comment {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  resize: vertical; min-height: 70px;
+  outline: none; margin-bottom: 14px;
+  transition: border-color 0.2s; line-height: 1.5;
+}
+.feedback-comment:focus { border-color: var(--accent); }
+.feedback-comment::placeholder { color: var(--text3); }
+.feedback-btn {
+  width: 100%; padding: 14px; border: none; border-radius: 10px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white; font-size: 15px; font-weight: 700; cursor: pointer;
+  font-family: 'Inter', sans-serif; transition: all 0.2s;
+}
+.feedback-btn:hover { transform: translateY(-1px); }
+.feedback-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.feedback-thanks {
+  text-align: center; padding: 20px;
+  color: var(--accent); font-size: 15px; font-weight: 600;
+}
+/* Free scan banner */
+.free-banner {
+  background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(6,182,212,0.06));
+  border: 1px solid rgba(16,185,129,0.3);
+  border-radius: var(--r);
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  display: flex; align-items: center; gap: 12px;
+}
+.free-banner-icon { font-size: 26px; flex-shrink: 0; }
+.free-banner-title { font-size: 14px; font-weight: 700; color: var(--accent); }
+.free-banner-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -598,6 +675,14 @@ textarea::placeholder { color: var(--text3); }
     
     <div class="expert-banner" id="expertBanner"></div>
 
+    <div class="free-banner" id="freeBanner">
+      <div class="free-banner-icon">🎁</div>
+      <div>
+        <div class="free-banner-title" id="freeBannerTitle">¡Tu primer análisis es GRATIS!</div>
+        <div class="free-banner-sub" id="freeBannerSub">Prueba VERIDEX sin coste. Después, 25€ por análisis.</div>
+      </div>
+    </div>
+
     <div class="upload-zone" id="uploadZone">
       <div class="upload-icon">📎</div>
       <div class="upload-title">Sube tu contrato</div>
@@ -640,7 +725,7 @@ textarea::placeholder { color: var(--text3); }
       </div>
     </div>
 
-    <button class="btn btn-primary" id="btnContinue" disabled>Continuar al pago →</button>
+    <button class="btn btn-primary" id="btnContinue" disabled>Analizar GRATIS →</button>
   </div>
 
   <!-- ===== PAYMENT ===== -->
@@ -722,6 +807,24 @@ textarea::placeholder { color: var(--text3); }
       <button class="action-btn btn-dl" id="btnDownload">📥 Descargar</button>
       <button class="action-btn btn-share" id="btnCopy">📋 Copiar</button>
       <button class="action-btn btn-new" id="btnNew">➕ Nuevo</button>
+    </div>
+
+    <!-- ===== FEEDBACK ===== -->
+    <div class="feedback-section" id="feedbackSection">
+      <div class="feedback-q">¿Te ha gustado el análisis?</div>
+      <div class="feedback-sub">Tu opinión nos ayuda a mejorar VERIDEX</div>
+      <div class="emoji-row">
+        <button class="emoji-btn" data-rating="1" title="Muy malo">😡</button>
+        <button class="emoji-btn" data-rating="2" title="Malo">😕</button>
+        <button class="emoji-btn" data-rating="3" title="Normal">😐</button>
+        <button class="emoji-btn" data-rating="4" title="Bueno">🙂</button>
+        <button class="emoji-btn" data-rating="5" title="Excelente">😍</button>
+      </div>
+      <textarea class="feedback-comment" id="feedbackComment" placeholder="¿Por qué? Cuéntanos qué te ha parecido o qué mejorarías... (opcional)"></textarea>
+      <button class="feedback-btn" id="btnSendFeedback" disabled>Enviar opinión</button>
+    </div>
+    <div class="feedback-thanks" id="feedbackThanks" style="display:none">
+      ✅ ¡Gracias por tu opinión! Nos ayuda a mejorar.
     </div>
   </div>
 
@@ -939,6 +1042,18 @@ let analysisResult = null;
 let stripe, elements, cardEl;
 let stepTimers = [];
 
+// ===== CONTROL DE ESCANEO GRATIS (1 por cuenta/dispositivo) =====
+function hasUsedFreeScan() {
+  return localStorage.getItem('veridex_free_used') === 'true';
+}
+function markFreeScanUsed() {
+  localStorage.setItem('veridex_free_used', 'true');
+  localStorage.setItem('veridex_free_used_date', new Date().toISOString());
+}
+function isFreeScamAvailable() {
+  return !hasUsedFreeScan();
+}
+
 // ===== SCREEN NAV =====
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -1026,6 +1141,24 @@ document.getElementById('btnStart').addEventListener('click', () => {
       <div class="expert-exp">🏛️ ${ct.exp}</div>
     </div>`;
 
+  // Actualizar banner segun escaneo gratis disponible
+  const freeBanner = document.getElementById('freeBanner');
+  const btnContinue = document.getElementById('btnContinue');
+  if (isFreeScamAvailable()) {
+    freeBanner.style.display = 'flex';
+    document.getElementById('freeBannerTitle').textContent = '¡Tu primer análisis es GRATIS!';
+    document.getElementById('freeBannerSub').textContent = 'Prueba VERIDEX sin coste. Después, 25€ por análisis.';
+    btnContinue.textContent = 'Analizar GRATIS →';
+  } else {
+    freeBanner.style.display = 'flex';
+    document.getElementById('freeBanner').style.background = 'linear-gradient(135deg, rgba(245,158,11,0.1), rgba(249,115,22,0.05))';
+    document.getElementById('freeBanner').style.borderColor = 'rgba(245,158,11,0.3)';
+    document.getElementById('freeBannerTitle').textContent = 'Análisis profesional · 25€';
+    document.getElementById('freeBannerTitle').style.color = 'var(--gold)';
+    document.getElementById('freeBannerSub').textContent = 'Ya has usado tu análisis gratuito. Este tendrá un coste de 25€.';
+    btnContinue.textContent = 'Continuar al pago →';
+  }
+
   showScreen('upload');
   initStripe();
 });
@@ -1038,6 +1171,15 @@ document.getElementById('btnContinue').addEventListener('click', () => {
     return;
   }
   const ct = CONTRACT_TYPES[selectedType];
+
+  // Si tiene escaneo gratis disponible -> análisis DIRECTO sin pago
+  if (isFreeScamAvailable()) {
+    markFreeScanUsed();          // marcar como usado
+    startAnalysis();             // analizar directamente
+    return;
+  }
+
+  // Si no -> ir al pago
   document.getElementById('paymentTitle').textContent = ct.name + ' · ' + ct.emoji;
   showScreen('payment');
   setTimeout(() => {
@@ -1237,6 +1379,7 @@ return emergencia;
 
 // ===== RENDER =====
 function renderResults(a) {
+  resetFeedback();  // mostrar feedback limpio en cada resultado
   const level = (a.risk_level || 'MODERADO').toLowerCase().replace(' ', '-');
   const emojis = { 'bajo':'🟢', 'moderado':'🟡', 'alto':'🟠', 'muy-alto':'🔴', 'muy alto':'🔴' };
   
@@ -1357,8 +1500,77 @@ document.getElementById('btnNew').addEventListener('click', () => {
   document.querySelectorAll('.contract-card').forEach(c => c.classList.remove('selected'));
   document.getElementById('btnStart').disabled = true;
   document.getElementById('btnStart').textContent = 'Selecciona un tipo de contrato';
+  resetFeedback();
   showScreen('welcome');
 });
+
+// ===== FEEDBACK CON EMOJIS =====
+let selectedRating = null;
+
+document.querySelectorAll('.emoji-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    selectedRating = parseInt(btn.dataset.rating);
+    document.getElementById('btnSendFeedback').disabled = false;
+  });
+});
+
+document.getElementById('btnSendFeedback').addEventListener('click', async () => {
+  if (!selectedRating) return;
+
+  const comment = document.getElementById('feedbackComment').value.trim();
+  const ct = CONTRACT_TYPES[selectedType];
+  const emojiMap = { 1:'😡', 2:'😕', 3:'😐', 4:'🙂', 5:'😍' };
+
+  const feedback = {
+    timestamp: new Date().toISOString(),
+    contract_type: selectedType,
+    contract_name: ct ? ct.name : '',
+    expert: ct ? ct.expert : '',
+    risk_level: analysisResult ? analysisResult.risk_level : '',
+    risk_score: analysisResult ? analysisResult.risk_score : 0,
+    rating: selectedRating,
+    emoji: emojiMap[selectedRating],
+    comment: comment,
+    language: selectedLang,
+    was_free: hasUsedFreeScan()
+  };
+
+  // Guardar localmente (historial de feedback)
+  const all = JSON.parse(localStorage.getItem('veridex_feedback') || '[]');
+  all.push(feedback);
+  localStorage.setItem('veridex_feedback', JSON.stringify(all));
+
+  // Intentar enviar al servidor (si está configurado). Falla en silencio si no hay backend.
+  try {
+    await fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(feedback)
+    });
+  } catch(e) {
+    // Sin backend: el feedback queda guardado localmente
+    console.log('Feedback guardado localmente:', feedback);
+  }
+
+  // Mostrar agradecimiento
+  document.getElementById('feedbackSection').style.display = 'none';
+  document.getElementById('feedbackThanks').style.display = 'block';
+});
+
+function resetFeedback() {
+  selectedRating = null;
+  document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('selected'));
+  const comment = document.getElementById('feedbackComment');
+  if (comment) comment.value = '';
+  const btn = document.getElementById('btnSendFeedback');
+  if (btn) btn.disabled = true;
+  const sec = document.getElementById('feedbackSection');
+  if (sec) sec.style.display = 'block';
+  const thanks = document.getElementById('feedbackThanks');
+  if (thanks) thanks.style.display = 'none';
+}
 
 // ===== STEPS =====
 function startSteps() {
