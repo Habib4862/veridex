@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://js.stripe.com/v3/"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 :root {
   --bg: #0a0f1e;
@@ -600,7 +601,7 @@ textarea::placeholder { color: var(--text3); }
     <div class="upload-zone" id="uploadZone">
       <div class="upload-icon">📎</div>
       <div class="upload-title">Sube tu contrato</div>
-      <div class="upload-sub">PDF, DOC, TXT · Click o arrastra aquí</div>
+      <div class="upload-sub">PDF · TXT · DOC · Click o arrastra aquí</div>
       <input type="file" id="fileInput" accept=".pdf,.txt,.doc,.docx" style="display:none">
     </div>
     <div class="file-pill" id="filePill"></div>
@@ -1083,13 +1084,61 @@ async function startAnalysis() {
   }
 }
 
-function readFile(file) {
+// ===== LECTOR DE ARCHIVOS (PDF, TXT, DOC) =====
+async function readFile(file) {
+  const name = file.name.toLowerCase();
+
+  // PDF: extraer texto con PDF.js
+  if (name.endsWith('.pdf')) {
+    return await readPDF(file);
+  }
+
+  // TXT / DOC / DOCX: leer como texto plano
   return new Promise((resolve, reject) => {
     const r = new FileReader();
-    r.onload = e => resolve(e.target.result);
+    r.onload = e => {
+      const text = e.target.result || '';
+      // Si el texto tiene demasiados caracteres raros es binario → aviso
+      const printable = text.replace(/[\x00-\x08\x0E-\x1F\x7F-\x9F]/g, '').length;
+      if (printable / text.length < 0.7) {
+        reject(new Error('El archivo parece estar en formato binario. Por favor pega el texto del contrato directamente en el campo de texto.'));
+      } else {
+        resolve(text);
+      }
+    };
     r.onerror = () => reject(new Error('Error leyendo archivo'));
-    r.readAsText(file);
+    r.readAsText(file, 'utf-8');
   });
+}
+
+async function readPDF(file) {
+  try {
+    // PDF.js necesita la URL del worker
+    if (typeof pdfjsLib === 'undefined') throw new Error('PDF.js no cargó correctamente');
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+    let fullText = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page    = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items.map(item => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+
+    fullText = fullText.trim();
+    if (fullText.length < 20) {
+      throw new Error('No se pudo extraer texto del PDF. Puede ser un PDF escaneado (imagen). Usa el botón "📸 Escanear con cámara" o pega el texto manualmente.');
+    }
+    return fullText;
+
+  } catch (err) {
+    if (err.message.includes('No se pudo') || err.message.includes('Usa el')) throw err;
+    throw new Error('Error leyendo PDF: ' + err.message + '. Intenta pegar el texto manualmente.');
+  }
 }
 
 // ===== CLAUDE API (llamada directa desde frontend) =====
