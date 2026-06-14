@@ -1153,9 +1153,9 @@ async function callClaude(text, lang, system) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 4000,
+      max_tokens: 6000,
       system,
-      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.\n\nContrato:\n${text.substring(0, 7000)}` }]
+      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.\n\nContrato:\n${text.substring(0, 4500)}` }]
     })
   });
 
@@ -1193,7 +1193,23 @@ async function callClaude(text, lang, system) {
 
   // Si todo falla, mostrar los primeros caracteres para depurar
   console.error('Respuesta raw de Claude:', raw.substring(0, 500));
-  throw new Error('No se pudo parsear la respuesta. La IA respondió: ' + raw.substring(0, 100));
+  // JSON truncado por límite de tokens — construir respuesta de emergencia
+console.warn('JSON truncado, construyendo respuesta parcial:', raw.substring(0, 200));
+const emergencia = {
+  risk_level: 'MODERADO',
+  risk_score: 50,
+  summary: 'El análisis fue interrumpido por la longitud del contrato. Por favor, pega solo las cláusulas más importantes (máx. 3000 caracteres) para obtener un análisis completo.',
+  risks: [{
+    title: 'Análisis incompleto',
+    description: 'El contrato es demasiado largo para analizarlo de una vez. Pega las cláusulas principales o el texto más relevante.',
+    law_ref: '',
+    severity: 'WARNING',
+    action: 'Acorta el texto del contrato y vuelve a intentarlo.'
+  }],
+  positives: [],
+  letter: 'No se pudo generar la carta legal por la longitud del contrato. Acorta el texto e inténtalo de nuevo.'
+};
+return emergencia;
 }
 
 // ===== RENDER =====
