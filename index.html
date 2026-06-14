@@ -831,9 +831,7 @@ textarea::placeholder { color: var(--text3); }
 </div>
 
 <script>
-const _k=['sk-ant-api03-SlEWTY8','geJ6N4Iv8dxE10FmXCXxcMym4o0FOMqojdg_HHkP','Ur-H1mPQquc08NYr9SE3xGmZ8m6dwiUiQRXBWlw-DM0XhgAA'].join(''); const ANTHROPIC_KEY=_k;
 const STRIPE_KEY = 'pk_test_51ThB1DF85N92AuF1HWYSrVM6XAYPTLCH2ZDCNqZe8L2hYCK97FCu3o94m3519QXGlSe1zP2S1AAI2AE5APnZmtcQ009YmaLukf';
-const ADMIN_CODE = 'VERIDEX486248624';
 
 // ===== CONTRACT TYPES =====
 const CONTRACT_TYPES = {
@@ -1174,8 +1172,8 @@ document.getElementById('btnContinue').addEventListener('click', () => {
 
   // Si tiene escaneo gratis disponible -> análisis DIRECTO sin pago
   if (isFreeScamAvailable()) {
-    markFreeScanUsed();          // marcar como usado
-    startAnalysis();             // analizar directamente
+    markFreeScanUsed();
+    startAnalysis();
     return;
   }
 
@@ -1194,24 +1192,57 @@ document.getElementById('btnPay').addEventListener('click', async () => {
   const btn = document.getElementById('btnPay');
   const errorBox = document.getElementById('errorBox');
   const code = (document.getElementById('adminCode').value || '').trim();
+  errorBox.style.display = 'none';
 
-  // Admin bypass: salta Stripe, analiza gratis
-  if (code === ADMIN_CODE) {
+  // Admin bypass: verificar en el backend, nunca en el cliente
+  if (code) {
     btn.disabled = true;
-    btn.textContent = '✅ Acceso admin concedido...';
-    startAnalysis();
+    btn.textContent = '⏳ Verificando código...';
+    try {
+      const r = await fetch('/api/verify-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const { valid } = await r.json();
+      if (!valid) throw new Error('Código de acceso inválido');
+      startAnalysis();
+    } catch(e) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = '❌ ' + (e.message || 'Error verificando código');
+      btn.disabled = false;
+      btn.textContent = '🔒 Pagar 25€ y analizar';
+    }
     return;
   }
 
+  // Flujo de pago con Stripe PaymentIntent
   btn.disabled = true;
-  btn.textContent = '⏳ Verificando...';
-  errorBox.style.display = 'none';
+  btn.textContent = '⏳ Preparando pago...';
 
   try {
     if (!stripe || !cardEl) throw new Error('Stripe no inicializado. Recarga la página.');
-    const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card: cardEl });
+
+    // 1. Crear PaymentIntent en el servidor (guarda la secret key)
+    const piResp = await fetch('/api/create-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!piResp.ok) {
+      const err = await piResp.json().catch(() => ({}));
+      throw new Error(err.error || 'Error preparando el pago');
+    }
+    const { client_secret } = await piResp.json();
+
+    // 2. Confirmar el pago en el cliente con los datos de tarjeta
+    btn.textContent = '⏳ Procesando pago...';
+    const { paymentIntent, error } = await stripe.confirmCardPayment(client_secret, {
+      payment_method: { card: cardEl }
+    });
+
     if (error) throw new Error(error.message);
-    console.log('Payment OK:', paymentMethod.id);
+    if (paymentIntent.status !== 'succeeded') throw new Error('El pago no se completó. Inténtalo de nuevo.');
+
     startAnalysis();
   } catch(e) {
     console.error('Payment error:', e);
@@ -1235,7 +1266,7 @@ async function startAnalysis() {
     if (!text && currentFile) text = await readFile(currentFile);
     if (!text || text.length < 20) throw new Error('Texto del contrato demasiado corto');
 
-    const result = await callClaude(text, selectedLang, ct.system(selectedLang));
+    const result = await callAnalyze(text, selectedLang, ct.system(selectedLang));
     analysisResult = result;
     renderResults(result);
     showScreen('results');
@@ -1306,75 +1337,20 @@ async function readPDF(file) {
   }
 }
 
-// ===== CLAUDE API (llamada directa desde frontend) =====
-async function callClaude(text, lang, system) {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+// ===== BACKEND API (Netlify Functions) =====
+async function callAnalyze(text, lang, system) {
+  const resp = await fetch('/api/analyze', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8000,
-      system,
-      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin markdown. Sé conciso en los textos para que el JSON no se trunque.\n\nContrato:\n${text.substring(0, 8000)}` }]
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: text.substring(0, 8000), lang, system })
   });
 
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({}));
-    throw new Error(`Error API (${resp.status}): ${err.error?.message || 'Comprueba la API key'}`);
+    throw new Error(err.error || `Error del servidor (${resp.status})`);
   }
 
-  const data = await resp.json();
-  const raw = (data.content?.[0]?.text || '').trim();
-
-  if (!raw) throw new Error('La IA no devolvió respuesta. Inténtalo de nuevo.');
-
-  // Intento 1: JSON directo
-  try { return JSON.parse(raw); } catch(_) {}
-
-  // Intento 2: extraer primer bloque JSON con balance de llaves
-  try {
-    const start = raw.indexOf('{');
-    if (start !== -1) {
-      let depth = 0, end = -1;
-      for (let i = start; i < raw.length; i++) {
-        if (raw[i] === '{') depth++;
-        else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
-      }
-      if (end !== -1) return JSON.parse(raw.substring(start, end + 1));
-    }
-  } catch(_) {}
-
-  // Intento 3: regex
-  try {
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-  } catch(_) {}
-
-  // Si todo falla, mostrar los primeros caracteres para depurar
-  console.error('Respuesta raw de Claude:', raw.substring(0, 500));
-  // JSON truncado por límite de tokens — construir respuesta de emergencia
-console.warn('JSON truncado, construyendo respuesta parcial:', raw.substring(0, 200));
-const emergencia = {
-  risk_level: 'MODERADO',
-  risk_score: 50,
-  summary: 'El análisis fue interrumpido por la longitud del contrato. Por favor, pega solo las cláusulas más importantes (máx. 3000 caracteres) para obtener un análisis completo.',
-  risks: [{
-    title: 'Análisis incompleto',
-    description: 'El contrato es demasiado largo para analizarlo de una vez. Pega las cláusulas principales o el texto más relevante.',
-    law_ref: '',
-    severity: 'WARNING',
-    action: 'Acorta el texto del contrato y vuelve a intentarlo.'
-  }],
-  positives: [],
-  letter: 'No se pudo generar la carta legal por la longitud del contrato. Acorta el texto e inténtalo de nuevo.'
-};
-return emergencia;
+  return resp.json();
 }
 
 // ===== RENDER =====
