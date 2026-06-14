@@ -1153,9 +1153,9 @@ async function callClaude(text, lang, system) {
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 6000,
+      max_tokens: 8000,
       system,
-      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.\n\nContrato:\n${text.substring(0, 4500)}` }]
+      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.\n\nContrato:\n${text.substring(0, 8000)}` }]
     })
   });
 
