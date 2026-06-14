@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0a0f1e">
+<title>VERIDEX — IA Legal Global</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://js.stripe.com/v3/"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<style>
+:root {
+  --bg: #0a0f1e;
+  --surface: #111827;
+  --surface2: #1a2235;
+  --border: rgba(255,255,255,0.08);
+  --accent: #10b981;
+  --cyan: #06b6d4;
+  --gold: #f59e0b;
+  --red: #ef4444;
+  --orange: #f97316;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --text3: #475569;
+  --r: 14px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* HEADER */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,15,30,0.92);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex; align-items: center; gap: 12px;
+}
+.logo-shield {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.logo-text { font-size: 18px; font-weight: 800; letter-spacing: 1px; }
+.logo-sub { font-size: 10px; color: var(--cyan); letter-spacing: 2px; font-weight: 500; }
+.header-badge {
+  margin-left: auto;
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.25);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* APP */
+.app { max-width: 480px; margin: 0 auto; padding: 20px 16px 60px; }
+.screen { display: none; }
+.screen.active { display: block; }
+
+/* WELCOME */
+.hero {
+  text-align: center;
+  padding: 30px 0 24px;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.25);
+  border-radius: 20px;
+  padding: 5px 14px;
+  font-size: 12px; color: var(--accent); font-weight: 600;
+  margin-bottom: 20px;
+}
+.hero-title {
+  font-size: 32px; font-weight: 800; line-height: 1.2;
+  margin-bottom: 14px;
+  background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-title span {
+  background: linear-gradient(135deg, #10b981, #06b6d4);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero-sub { color: var(--text2); font-size: 15px; line-height: 1.6; margin-bottom: 28px; }
+
+/* STATS BAR */
+.stats-bar {
+  display: flex; gap: 1px;
+  background: var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+.stat {
+  flex: 1;
+  background: var(--surface);
+  padding: 14px 8px;
+  text-align: center;
+}
+.stat-num { font-size: 18px; font-weight: 800; color: var(--accent); }
+.stat-label { font-size: 10px; color: var(--text2); margin-top: 2px; letter-spacing: 0.5px; }
+
+/* CONTRACT TYPE GRID */
+.section-label {
+  font-size: 11px; font-weight: 600; color: var(--text2);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.contract-grid {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; margin-bottom: 24px;
+}
+.contract-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+.contract-card::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--cyan));
+  opacity: 0; transition: opacity 0.2s;
+}
+.contract-card:hover, .contract-card.selected {
+  border-color: var(--accent);
+  background: rgba(16,185,129,0.06);
+}
+.contract-card:hover::before, .contract-card.selected::before { opacity: 1; }
+.contract-icon { font-size: 28px; margin-bottom: 8px; }
+.contract-name { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+.contract-expert { font-size: 11px; color: var(--cyan); }
+.contract-badge {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(245,158,11,0.15);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: 4px;
+  font-size: 9px; color: var(--gold); font-weight: 700;
+  padding: 2px 5px;
+}
+
+/* PRICING */
+.pricing-card {
+  background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(6,182,212,0.05));
+  border: 1px solid rgba(16,185,129,0.2);
+  border-radius: var(--r);
+  padding: 20px;
+  margin-bottom: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.pricing-left .price { font-size: 32px; font-weight: 800; color: var(--text); }
+.pricing-left .price span { font-size: 16px; color: var(--text2); font-weight: 400; }
+.pricing-left .price-note { font-size: 12px; color: var(--text2); margin-top: 4px; }
+.pricing-right { text-align: right; }
+.pricing-feature { font-size: 12px; color: var(--accent); font-weight: 500; line-height: 1.8; }
+
+/* BUTTONS */
+.btn {
+  width: 100%; padding: 16px; border: none; border-radius: var(--r);
+  font-size: 16px; font-weight: 700; cursor: pointer;
+  font-family: 'Inter', sans-serif; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  box-shadow: 0 4px 24px rgba(16,185,129,0.3);
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 30px rgba(16,185,129,0.4); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.btn-ghost {
+  background: var(--surface);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.btn-back {
+  background: none; border: none; color: var(--text2);
+  font-size: 13px; cursor: pointer; padding: 0 0 20px;
+  font-family: 'Inter', sans-serif; display: flex; align-items: center; gap: 6px;
+}
+
+/* EXPERT BANNER */
+.expert-banner {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+  margin-bottom: 20px;
+  display: flex; align-items: center; gap: 14px;
+}
+.expert-avatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--cyan));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0;
+}
+.expert-name { font-size: 14px; font-weight: 700; }
+.expert-title { font-size: 12px; color: var(--cyan); margin-top: 2px; }
+.expert-exp { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+/* UPLOAD */
+.upload-zone {
+  border: 2px dashed rgba(16,185,129,0.3);
+  border-radius: var(--r);
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 16px;
+  background: rgba(16,185,129,0.02);
+  transition: all 0.2s;
+  position: relative;
+}
+.upload-zone:hover { border-color: var(--accent); background: rgba(16,185,129,0.05); }
+.upload-icon { font-size: 40px; margin-bottom: 12px; }
+.upload-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+.upload-sub { font-size: 13px; color: var(--text2); }
+.file-pill {
+  display: none;
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.3);
+  border-radius: 8px; padding: 10px 14px;
+  color: var(--accent); font-size: 13px; font-weight: 500;
+  margin-bottom: 14px;
+}
+.divider { text-align: center; color: var(--text3); font-size: 12px; margin: 14px 0; position: relative; }
+.divider::before, .divider::after {
+  content: ''; position: absolute; top: 50%; width: 42%; height: 1px;
+  background: var(--border);
+}
+.divider::before { left: 0; }
+.divider::after { right: 0; }
+textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 14px;
+  color: var(--text);
+  font-size: 14px;
+  font-family: 'Inter', sans-serif;
+  resize: vertical; min-height: 140px;
+  outline: none; margin-bottom: 14px;
+  transition: border-color 0.2s;
+  line-height: 1.6;
+}
+textarea:focus { border-color: var(--accent); }
+textarea::placeholder { color: var(--text3); }
+
+/* LANGUAGE SELECTOR */
+.lang-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 6px; margin-bottom: 20px;
+}
+.lang-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 6px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+.lang-btn:hover, .lang-btn.selected {
+  border-color: var(--accent);
+  background: rgba(16,185,129,0.06);
+}
+.lang-flag { font-size: 20px; margin-bottom: 3px; }
+.lang-name { font-size: 10px; color: var(--text2); font-weight: 500; }
+.lang-btn.selected .lang-name { color: var(--accent); }
+
+/* PAYMENT */
+.payment-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden; margin-bottom: 20px;
+}
+.payment-header {
+  background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(6,182,212,0.05));
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.payment-title { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 8px; }
+.payment-rows { padding: 16px 20px; }
+.payment-row {
+  display: flex; justify-content: space-between;
+  font-size: 14px; color: var(--text2);
+  padding: 6px 0;
+}
+.payment-total {
+  display: flex; justify-content: space-between;
+  font-size: 18px; font-weight: 800; color: var(--text);
+  padding: 12px 0 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+.card-wrap {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.card-label {
+  font-size: 11px; font-weight: 600;
+  color: var(--text2); letter-spacing: 1px;
+  text-transform: uppercase; margin-bottom: 12px;
+}
+.test-pill {
+  background: rgba(6,182,212,0.08);
+  border: 1px solid rgba(6,182,212,0.2);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 12px; color: var(--text2);
+  margin-bottom: 14px; line-height: 1.6;
+}
+.test-pill strong { color: var(--cyan); }
+.error-box {
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.25);
+  border-radius: 8px; padding: 12px 14px;
+  color: #fca5a5; font-size: 13px;
+  margin-bottom: 14px; display: none;
+}
+.security-row {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; font-size: 12px; color: var(--text3);
+  margin-top: 12px;
+}
+
+/* LOADING */
+.loading-wrap { text-align: center; padding: 50px 20px 30px; }
+.spinner-ring {
+  width: 64px; height: 64px; margin: 0 auto 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(16,185,129,0.15);
+  border-top-color: var(--accent);
+  animation: spin 1s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-title { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.loading-sub { color: var(--text2); font-size: 14px; margin-bottom: 32px; line-height: 1.5; }
+.steps-list { text-align: left; }
+.step-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+  color: var(--text3); font-size: 14px; transition: color 0.3s;
+}
+.step-row:last-child { border-bottom: none; }
+.step-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--surface2); flex-shrink: 0; transition: background 0.3s;
+}
+.step-row.active { color: var(--cyan); }
+.step-row.active .step-dot { background: var(--cyan); box-shadow: 0 0 8px rgba(6,182,212,0.6); }
+.step-row.done { color: var(--accent); }
+.step-row.done .step-dot { background: var(--accent); }
+
+/* RESULTS */
+.result-hero {
+  border-radius: var(--r); padding: 28px 20px;
+  text-align: center; margin-bottom: 20px; position: relative; overflow: hidden;
+}
+.result-hero::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center top, rgba(255,255,255,0.04), transparent 70%);
+}
+.result-hero.bajo { background: linear-gradient(135deg, rgba(16,185,129,0.12), rgba(16,185,129,0.04)); border: 1px solid rgba(16,185,129,0.3); }
+.result-hero.moderado { background: linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04)); border: 1px solid rgba(245,158,11,0.3); }
+.result-hero.alto { background: linear-gradient(135deg, rgba(249,115,22,0.12), rgba(249,115,22,0.04)); border: 1px solid rgba(249,115,22,0.3); }
+.result-hero.muy-alto { background: linear-gradient(135deg, rgba(239,68,68,0.12), rgba(239,68,68,0.04)); border: 1px solid rgba(239,68,68,0.3); }
+.result-emoji { font-size: 52px; margin-bottom: 10px; }
+.result-level { font-size: 26px; font-weight: 800; }
+.result-score { font-size: 13px; color: var(--text2); margin-top: 4px; }
+.result-summary { font-size: 14px; color: var(--text2); margin-top: 14px; line-height: 1.6; }
+
+.section-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+  color: var(--text2); text-transform: uppercase;
+  margin: 24px 0 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+.result-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 16px;
+  margin-bottom: 8px;
+  transition: border-color 0.2s;
+}
+.result-card.critical { border-left: 3px solid var(--red); }
+.result-card.moderate { border-left: 3px solid var(--orange); }
+.result-card.warning { border-left: 3px solid var(--gold); }
+.result-card.positive { border-left: 3px solid var(--accent); }
+.card-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 10px; margin-bottom: 8px;
+}
+.card-title { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.sev-badge {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 3px 7px; border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+}
+.sev-badge.critical { background: rgba(239,68,68,0.15); color: #fca5a5; }
+.sev-badge.moderate { background: rgba(249,115,22,0.15); color: #fdba74; }
+.sev-badge.warning { background: rgba(245,158,11,0.15); color: #fcd34d; }
+.card-desc { font-size: 13px; color: var(--text2); line-height: 1.5; }
+.card-law { font-size: 11px; color: var(--text3); margin-top: 8px; font-family: 'Courier New', monospace; }
+.card-action { font-size: 12px; color: var(--orange); font-weight: 600; margin-top: 8px; }
+
+.letter-container {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden; margin-bottom: 20px;
+}
+.letter-header {
+  background: var(--surface2);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 600; color: var(--text2);
+  display: flex; align-items: center; gap: 8px;
+}
+.letter-body {
+  padding: 16px;
+  font-size: 13px; color: var(--text2);
+  line-height: 1.8; white-space: pre-wrap;
+}
+
+.action-grid { display: flex; gap: 8px; margin-top: 8px; }
+.action-btn {
+  flex: 1; padding: 14px 8px;
+  border: none; border-radius: var(--r);
+  font-size: 13px; font-weight: 700;
+  cursor: pointer; font-family: 'Inter', sans-serif;
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.action-btn:hover { transform: translateY(-1px); }
+.btn-dl { background: var(--accent); color: white; }
+.btn-share { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-new { background: var(--cyan); color: white; }
+
+/* OCR BUTTON */
+.btn-ocr {
+  width: 100%; padding: 13px; border-radius: var(--r);
+  border: 1.5px solid var(--cyan);
+  background: rgba(6,182,212,0.06);
+  color: var(--cyan); font-size: 14px; font-weight: 600;
+  cursor: pointer; font-family: 'Inter', sans-serif;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-bottom: 14px; transition: all 0.2s;
+}
+.btn-ocr:hover { background: rgba(6,182,212,0.12); transform: translateY(-1px); }
+.btn-ocr:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.ocr-progress {
+  display: none;
+  background: rgba(6,182,212,0.08);
+  border: 1px solid rgba(6,182,212,0.2);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 12px; color: var(--cyan);
+  margin-bottom: 12px; text-align: center;
+}
+.admin-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 11px 14px;
+  color: var(--text3);
+  font-size: 13px;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: border-color 0.2s;
+  margin-bottom: 12px;
+  letter-spacing: 2px;
+}
+.admin-input:focus { border-color: rgba(16,185,129,0.3); color: var(--accent); }
+.admin-input::placeholder { letter-spacing: 0; color: var(--text3); }
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo-shield">⚖️</div>
+  <div>
+    <div class="logo-text">VERIDEX</div>
+    <div class="logo-sub">IA LEGAL GLOBAL</div>
+  </div>
+  <div class="header-badge">🟢 EN VIVO</div>
+</div>
+
+<div class="app">
+
+  <!-- ===== WELCOME ===== -->
+  <div class="screen active" id="s-welcome">
+    <div class="hero">
+      <div class="hero-badge">⚡ Análisis en 30 segundos</div>
+      <h1 class="hero-title">Protege tus<br><span>contratos</span> con IA</h1>
+      <p class="hero-sub">Abogados especializados por IA detectan cláusulas abusivas, ilegales y peligrosas en cualquier tipo de contrato.</p>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat"><div class="stat-num">12K+</div><div class="stat-label">Contratos</div></div>
+      <div class="stat"><div class="stat-num">98%</div><div class="stat-label">Precisión</div></div>
+      <div class="stat"><div class="stat-num">8</div><div class="stat-label">Especialistas</div></div>
+      <div class="stat"><div class="stat-num">7</div><div class="stat-label">Idiomas</div></div>
+    </div>
+
+    <div class="section-label">Selecciona tipo de contrato</div>
+    <div class="contract-grid">
+      <div class="contract-card" data-type="rental" onclick="selectContract(this)">
+        <div class="contract-icon">🏠</div>
+        <div class="contract-name">Alquiler</div>
+        <div class="contract-expert">Esp. Inmobiliario</div>
+      </div>
+      <div class="contract-card" data-type="labor" onclick="selectContract(this)">
+        <div class="contract-icon">💼</div>
+        <div class="contract-name">Trabajo</div>
+        <div class="contract-expert">Esp. Laboral</div>
+      </div>
+      <div class="contract-card" data-type="freelance" onclick="selectContract(this)">
+        <div class="contract-icon">🧑‍💻</div>
+        <div class="contract-name">Freelance</div>
+        <div class="contract-expert">Esp. Mercantil</div>
+      </div>
+      <div class="contract-card" data-type="purchase" onclick="selectContract(this)">
+        <div class="contract-icon">🏢</div>
+        <div class="contract-name">Compraventa</div>
+        <div class="contract-expert">Esp. Civil</div>
+      </div>
+      <div class="contract-card" data-type="mortgage" onclick="selectContract(this)">
+        <div class="contract-icon">🏦</div>
+        <div class="contract-name">Hipoteca</div>
+        <div class="contract-expert">Esp. Bancario</div>
+      </div>
+      <div class="contract-card" data-type="nda" onclick="selectContract(this)">
+        <div class="contract-icon">🔒</div>
+        <div class="contract-name">NDA / Conf.</div>
+        <div class="contract-expert">Esp. Mercantil</div>
+      </div>
+      <div class="contract-card" data-type="business" onclick="selectContract(this)">
+        <div class="contract-icon">🤝</div>
+        <div class="contract-name">Sociedad</div>
+        <div class="contract-expert">Esp. Societario</div>
+      </div>
+      <div class="contract-card" data-type="other" onclick="selectContract(this)">
+        <div class="contract-icon">📄</div>
+        <div class="contract-name">Otro</div>
+        <div class="contract-expert">Esp. General</div>
+        <div class="contract-badge">IA</div>
+      </div>
+    </div>
+
+    <div class="pricing-card">
+      <div class="pricing-left">
+        <div class="price">25€ <span>/ análisis</span></div>
+        <div class="price-note">Pago único · Sin suscripción</div>
+      </div>
+      <div class="pricing-right">
+        <div class="pricing-feature">✓ Análisis experto IA<br>✓ Carta legal incluida<br>✓ 7 idiomas</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btnStart" disabled>Selecciona un tipo de contrato</button>
+
+    <div style="margin-top: 20px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; display: flex; gap: 10px; align-items: flex-start;">
+      <div style="font-size: 18px; flex-shrink: 0; margin-top: 1px;">⚖️</div>
+      <div>
+        <div style="font-size: 11px; font-weight: 700; color: #94a3b8; letter-spacing: 0.8px; text-transform: uppercase; margin-bottom: 5px;">Aviso Legal</div>
+        <div style="font-size: 12px; color: #475569; line-height: 1.6;">
+          Los análisis generados por VERIDEX tienen carácter <strong style="color: #64748b;">meramente informativo</strong> y están basados en inteligencia artificial. No constituyen asesoramiento jurídico profesional ni sustituyen la consulta con un <strong style="color: #64748b;">abogado colegiado</strong>. Para decisiones legales relevantes, consulta siempre con un profesional del derecho habilitado.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== UPLOAD ===== -->
+  <div class="screen" id="s-upload">
+    <button class="btn-back" onclick="showScreen('welcome')">← Volver</button>
+    
+    <div class="expert-banner" id="expertBanner"></div>
+
+    <div class="upload-zone" id="uploadZone">
+      <div class="upload-icon">📎</div>
+      <div class="upload-title">Sube tu contrato</div>
+      <div class="upload-sub">PDF, DOC, TXT · Click o arrastra aquí</div>
+      <input type="file" id="fileInput" accept=".pdf,.txt,.doc,.docx" style="display:none">
+    </div>
+    <div class="file-pill" id="filePill"></div>
+
+    <button class="btn-ocr" id="btnOCR" onclick="scanWithCamera()">📸 Escanear contrato con la cámara</button>
+    <div class="ocr-progress" id="ocrProgress"></div>
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none">
+    <div class="divider">o escribe / pega el texto</div>
+    <textarea id="contractText" placeholder="Pega el texto del contrato...&#10;&#10;Ej: El arrendatario abonará 3 meses de fianza..."></textarea>
+
+    <div class="section-label" style="margin-top:4px">Idioma del análisis</div>
+    <div class="lang-grid">
+      <div class="lang-btn selected" data-lang="Spanish" onclick="selectLang(this)">
+        <div class="lang-flag">🇪🇸</div><div class="lang-name">Español</div>
+      </div>
+      <div class="lang-btn" data-lang="English" onclick="selectLang(this)">
+        <div class="lang-flag">🇬🇧</div><div class="lang-name">English</div>
+      </div>
+      <div class="lang-btn" data-lang="French" onclick="selectLang(this)">
+        <div class="lang-flag">🇫🇷</div><div class="lang-name">Français</div>
+      </div>
+      <div class="lang-btn" data-lang="German" onclick="selectLang(this)">
+        <div class="lang-flag">🇩🇪</div><div class="lang-name">Deutsch</div>
+      </div>
+      <div class="lang-btn" data-lang="Arabic" onclick="selectLang(this)">
+        <div class="lang-flag">🇸🇦</div><div class="lang-name">العربية</div>
+      </div>
+      <div class="lang-btn" data-lang="Italian" onclick="selectLang(this)">
+        <div class="lang-flag">🇮🇹</div><div class="lang-name">Italiano</div>
+      </div>
+      <div class="lang-btn" data-lang="Portuguese" onclick="selectLang(this)">
+        <div class="lang-flag">🇵🇹</div><div class="lang-name">Português</div>
+      </div>
+      <div class="lang-btn" data-lang="Chinese" onclick="selectLang(this)">
+        <div class="lang-flag">🇨🇳</div><div class="lang-name">中文</div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="btnContinue" disabled>Continuar al pago →</button>
+  </div>
+
+  <!-- ===== PAYMENT ===== -->
+  <div class="screen" id="s-payment">
+    <button class="btn-back" onclick="showScreen('upload')">← Volver</button>
+
+    <div class="payment-card">
+      <div class="payment-header">
+        <div class="payment-title">RESUMEN DEL PEDIDO</div>
+        <div style="font-size:15px;font-weight:700;" id="paymentTitle">Análisis Legal IA</div>
+      </div>
+      <div class="payment-rows">
+        <div class="payment-row"><span>Análisis por IA especializada</span><span>€20.83</span></div>
+        <div class="payment-row"><span>IVA 21%</span><span>€4.17</span></div>
+        <div class="payment-total"><span>Total</span><span>€25.00</span></div>
+      </div>
+    </div>
+
+    <div class="test-pill">
+      🧪 <strong>Tarjeta de prueba:</strong> 4242 4242 4242 4242 &nbsp;·&nbsp; 12/28 &nbsp;·&nbsp; CVC: 123
+    </div>
+
+    <div class="card-wrap">
+      <div class="card-label">💳 Datos de tarjeta</div>
+      <div id="card-element"></div>
+    </div>
+
+    <div class="error-box" id="errorBox"></div>
+
+    <input type="password" class="admin-input" id="adminCode" placeholder="🔑 Código de acceso (opcional)">
+    <button class="btn btn-primary" id="btnPay">🔒 Pagar 25€ y analizar</button>
+    <div class="security-row">🔐 Pago seguro · Stripe · SSL 256-bit</div>
+  </div>
+
+  <!-- ===== LOADING ===== -->
+  <div class="screen" id="s-loading">
+    <div class="loading-wrap">
+      <div class="spinner-ring"></div>
+      <div class="loading-title" id="loadingTitle">Analizando...</div>
+      <div class="loading-sub" id="loadingSub">Tu abogado IA especializado está revisando el contrato</div>
+      <div class="steps-list">
+        <div class="step-row active" id="step1"><div class="step-dot"></div> Leyendo el documento</div>
+        <div class="step-row" id="step2"><div class="step-dot"></div> Identificando cláusulas clave</div>
+        <div class="step-row" id="step3"><div class="step-dot"></div> Aplicando legislación vigente</div>
+        <div class="step-row" id="step4"><div class="step-dot"></div> Generando carta legal</div>
+        <div class="step-row" id="step5"><div class="step-dot"></div> Preparando informe final</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== RESULTS ===== -->
+  <div class="screen" id="s-results">
+    <div class="result-hero" id="resultHero">
+      <div class="result-emoji" id="resultEmoji"></div>
+      <div class="result-level" id="resultLevel"></div>
+      <div class="result-score" id="resultScore"></div>
+      <div class="result-summary" id="resultSummary"></div>
+    </div>
+
+    <div id="risksSection" style="display:none">
+      <div class="section-title">⚠️ Riesgos detectados</div>
+      <div id="risksList"></div>
+    </div>
+
+    <div id="posSection" style="display:none">
+      <div class="section-title">✅ Aspectos positivos</div>
+      <div id="posList"></div>
+    </div>
+
+    <div id="letterSection" style="display:none">
+      <div class="section-title">📝 Carta legal</div>
+      <div class="letter-container">
+        <div class="letter-header">📬 Lista para enviar al propietario / empleador / contraparte</div>
+        <div class="letter-body" id="letterBody"></div>
+      </div>
+    </div>
+
+    <div class="action-grid">
+      <button class="action-btn btn-dl" id="btnDownload">📥 Descargar</button>
+      <button class="action-btn btn-share" id="btnCopy">📋 Copiar</button>
+      <button class="action-btn btn-new" id="btnNew">➕ Nuevo</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const _k=['sk-ant-api03-SlEWTY8','geJ6N4Iv8dxE10FmXCXxcMym4o0FOMqojdg_HHkP','Ur-H1mPQquc08NYr9SE3xGmZ8m6dwiUiQRXBWlw-DM0XhgAA'].join(''); const ANTHROPIC_KEY=_k;
+const STRIPE_KEY = 'pk_test_51ThB1DF85N92AuF1HWYSrVM6XAYPTLCH2ZDCNqZe8L2hYCK97FCu3o94m3519QXGlSe1zP2S1AAI2AE5APnZmtcQ009YmaLukf';
+const ADMIN_CODE = 'VERIDEX486248624';
+
+// ===== CONTRACT TYPES =====
+const CONTRACT_TYPES = {
+  rental: {
+    name: 'Contrato de Alquiler',
+    emoji: '🏠',
+    expert: 'Dra. Carmen Vidal',
+    title: 'Especialista en Derecho Inmobiliario',
+    exp: '15 años · Experta en LAU, protección del arrendatario',
+    system: (lang) => `Eres la Dra. Carmen Vidal, abogada senior especialista en Derecho Inmobiliario Español con 15 años de experiencia. Experta en Ley de Arrendamientos Urbanos (LAU).
+
+LEGISLACIÓN APLICABLE:
+- LAU Art. 9.1: Cláusulas abusivas = NULAS
+- LAU Art. 36-37: Fianza máx. 2 meses. Registro obligatorio
+- LAU Art. 21: Derecho a reparaciones
+- LAU Art. 27: Proceso desahucio (min. 2 meses aviso)
+- LAU Art. 18: Incremento renta con aviso previo
+
+RIESGOS CRÍTICOS: fianza >2 meses, prohibición mascotas sin base, penalización >1 mes, desahucio inmediato, gastos ocultos sin detallar
+RIESGOS MODERADOS: duración <3 meses, sin inventario, incremento sin preaviso
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"LAU Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al propietario solicitando modificaciones con artículos LAU"}`
+  },
+  labor: {
+    name: 'Contrato de Trabajo',
+    emoji: '💼',
+    expert: 'Dr. Miguel Serrano',
+    title: 'Especialista en Derecho Laboral',
+    exp: '20 años · Experto en Estatuto de los Trabajadores',
+    system: (lang) => `Eres el Dr. Miguel Serrano, abogado laboralista con 20 años de experiencia. Experto en Estatuto de los Trabajadores (ET) y convenios colectivos en España.
+
+LEGISLACIÓN APLICABLE:
+- ET Art. 4: Derechos básicos del trabajador
+- ET Art. 14: Periodo de prueba (máx. 6 meses directivos, 2 meses resto)
+- ET Art. 26: Salario y complementos
+- ET Art. 37: Descanso y vacaciones (mín. 30 días)
+- ET Art. 53-54: Causas de despido
+- ET Art. 56: Indemnización despido improcedente (33 días/año)
+- LOPD: Protección de datos del trabajador
+- Ley 10/2021: Teletrabajo
+
+RIESGOS CRÍTICOS: periodo prueba excesivo, cláusulas de no competencia sin compensación, jornada ilegal, renuncia derechos sindicales, salario bajo convenio
+RIESGOS MODERADOS: funciones ambiguas, cláusulas de confidencialidad abusivas, ausencia de plus teletrabajo
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"ET Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} a RRHH solicitando modificaciones con artículos ET"}`
+  },
+  freelance: {
+    name: 'Contrato Freelance',
+    emoji: '🧑‍💻',
+    expert: 'Dra. Laura Mendez',
+    title: 'Especialista en Derecho Mercantil Digital',
+    exp: '12 años · Contratos tech, propiedad intelectual',
+    system: (lang) => `Eres la Dra. Laura Mendez, abogada especialista en contratos de servicios profesionales, freelance y propiedad intelectual con 12 años de experiencia.
+
+LEGISLACIÓN APLICABLE:
+- Código Civil Art. 1544: Contrato de arrendamiento de servicios
+- LPI (Ley de Propiedad Intelectual): derechos sobre el trabajo creado
+- Ley 3/2004: Morosidad en operaciones comerciales
+- RGPD/LOPD: si el contrato implica datos personales
+- Ley Riders (Ley 12/2021): criterios de dependencia
+
+RIESGOS CRÍTICOS: cesión total derechos PI sin compensación, cláusulas de exclusividad sin retribución, pagos aplazados indefinidos, propiedad intelectual del cliente sobre todo el trabajo
+RIESGOS MODERADOS: plazos de pago >60 días, penalizaciones asimétricas, cláusulas de confidencialidad perpetua, ausencia de acuerdo de alcance
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"Código Civil Art. XX / LPI Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al cliente solicitando modificaciones"}`
+  },
+  purchase: {
+    name: 'Compraventa',
+    emoji: '🏢',
+    expert: 'Dr. Antonio García',
+    title: 'Especialista en Derecho Civil y Mercantil',
+    exp: '18 años · Compraventas inmobiliarias y empresariales',
+    system: (lang) => `Eres el Dr. Antonio García, notario y abogado especialista en contratos de compraventa civil y mercantil con 18 años de experiencia.
+
+LEGISLACIÓN APLICABLE:
+- Código Civil Art. 1445-1537: Compraventa
+- Código Civil Art. 1474: Saneamiento por vicios ocultos
+- Ley Hipotecaria: compraventas inmobiliarias
+- Ley de Consumidores: garantías y devoluciones
+- UCC / CISG: compraventas internacionales
+
+RIESGOS CRÍTICOS: exclusión de vicios ocultos, cláusulas de no responsabilidad totales, precio aplazado sin garantías, resolución unilateral injustificada
+RIESGOS MODERADOS: arras sin especificar tipo (confirmatorias/penitenciales/penales), ausencia de condiciones suspensivas, gastos mal distribuidos
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"CC Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al vendedor solicitando modificaciones"}`
+  },
+  mortgage: {
+    name: 'Hipoteca',
+    emoji: '🏦',
+    expert: 'Dra. Isabel Torres',
+    title: 'Especialista en Derecho Bancario',
+    exp: '22 años · Hipotecas, préstamos, litigios bancarios',
+    system: (lang) => `Eres la Dra. Isabel Torres, abogada especialista en derecho bancario e hipotecario con 22 años de experiencia y numerosas sentencias favorables al consumidor.
+
+LEGISLACIÓN APLICABLE:
+- Ley 5/2019: Reguladora de Contratos de Crédito Inmobiliario (LCCI)
+- LCCI Art. 15: Información precontractual obligatoria (FEIN)
+- LCCI Art. 20: Prohibición cláusulas suelo
+- Código Civil Art. 1826: Préstamo con garantía
+- STS 705/2015: Nulidad cláusulas suelo
+- STS 241/2013: Gastos hipotecarios
+- Ley Hipotecaria Art. 114: Intereses de demora (máx. 3x interés legal)
+
+RIESGOS CRÍTICOS: cláusula suelo, intereses demora >3x legal, vencimiento anticipado abusivo, gastos todos al prestatario, comisiones de apertura desproporcionadas
+RIESGOS MODERADOS: tipo variable sin CAP, seguros vinculados obligatorios, falta de FEIN o FIAE
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"LCCI Art. XX / STS XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} al banco solicitando modificaciones o nulidad de cláusulas"}`
+  },
+  nda: {
+    name: 'NDA / Confidencialidad',
+    emoji: '🔒',
+    expert: 'Dr. Raúl Herrera',
+    title: 'Especialista en Contratos Mercantiles',
+    exp: '14 años · NDAs, M&A, contratos internacionales',
+    system: (lang) => `Eres el Dr. Raúl Herrera, abogado especialista en contratos de confidencialidad y acuerdos de no divulgación (NDA) para operaciones nacionales e internacionales.
+
+LEGISLACIÓN APLICABLE:
+- Ley 1/2019 de Secretos Empresariales
+- Código Civil Art. 1255: Libertad de pactos
+- RGPD: si el NDA incluye datos personales
+- Ley de Competencia Desleal: información confidencial
+- Directiva UE 2016/943: Protección know-how
+
+RIESGOS CRÍTICOS: duración indefinida sin límite, definición de "información confidencial" excesivamente amplia, penalizaciones desproporcionadas, restricciones geográficas abusivas
+RIESGOS MODERADOS: ausencia de excepciones (información pública, conocida previamente), ley aplicable desfavorable, tribunales en jurisdicción lejana
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"Ley 1/2019 Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} solicitando modificaciones al NDA"}`
+  },
+  business: {
+    name: 'Contrato de Sociedad',
+    emoji: '🤝',
+    expert: 'Dra. Patricia Ruiz',
+    title: 'Especialista en Derecho Societario',
+    exp: '16 años · Constitución sociedades, pactos parasociales',
+    system: (lang) => `Eres la Dra. Patricia Ruiz, abogada especialista en derecho societario y contratos entre socios con 16 años de experiencia.
+
+LEGISLACIÓN APLICABLE:
+- Ley de Sociedades de Capital (LSC): SL y SA
+- LSC Art. 93-96: Derechos del socio
+- LSC Art. 160: Reserva estatutaria
+- Código Civil Art. 1665-1708: Sociedad civil
+- Ley 22/2003: Concursal (protección en disolución)
+
+RIESGOS CRÍTICOS: cláusulas drag-along sin contraprestación justa, dilución sin aprobación, derechos de veto abusivos, ausencia de mecanismo de salida, distribución de dividendos arbitraria
+RIESGOS MODERADOS: ausencia de pacto deadlock, valoración de participaciones no definida, restricciones excesivas transmisión
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"LSC Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} a los socios solicitando modificaciones"}`
+  },
+  other: {
+    name: 'Otro Contrato',
+    emoji: '📄',
+    expert: 'Dr. Sergio Campos',
+    title: 'Abogado Generalista Senior',
+    exp: '25 años · Todo tipo de contratos, arbitraje internacional',
+    system: (lang) => `Eres el Dr. Sergio Campos, abogado generalista senior con 25 años de experiencia en todo tipo de contratos civiles, mercantiles e internacionales.
+
+ANÁLISIS GENERAL basado en:
+- Código Civil Español: principios contractuales (Art. 1254-1314)
+- Código de Comercio: contratos mercantiles
+- Ley de Consumidores y Usuarios (LGDCU)
+- Directivas europeas de protección al consumidor
+- Principios UNIDROIT para contratos internacionales
+
+BUSCA SIEMPRE: cláusulas abusivas, desequilibrio en las partes, limitaciones de responsabilidad excesivas, penalizaciones desproporcionadas, obligaciones unilaterales, falta de transparencia, plazos abusivos, jurisdicción desfavorable
+
+Responde en ${lang}. SOLO JSON sin markdown:
+{"risk_level":"BAJO|MODERADO|ALTO|MUY ALTO","risk_score":0,"summary":"...","risks":[{"title":"...","description":"...","law_ref":"CC Art. XX","severity":"CRITICAL|MODERATE|WARNING","action":"..."}],"positives":[{"title":"...","description":"..."}],"letter":"Carta formal en ${lang} solicitando modificaciones al contrato"}`
+  }
+};
+
+// ===== STATE =====
+let selectedType = null;
+let selectedLang = 'Spanish';
+let currentFile = null;
+let analysisResult = null;
+let stripe, elements, cardEl;
+let stepTimers = [];
+
+// ===== SCREEN NAV =====
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s-' + id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ===== CONTRACT SELECTION =====
+function selectContract(el) {
+  document.querySelectorAll('.contract-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedType = el.dataset.type;
+  const btn = document.getElementById('btnStart');
+  btn.disabled = false;
+  btn.textContent = 'Analizar contrato →';
+}
+
+// ===== LANGUAGE SELECTION =====
+function selectLang(el) {
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedLang = el.dataset.lang;
+}
+
+// ===== STRIPE INIT =====
+function initStripe() {
+  if (stripe) return;
+  try {
+    stripe = Stripe(STRIPE_KEY);
+    elements = stripe.elements();
+    cardEl = elements.create('card', {
+      style: {
+        base: {
+          fontSize: '15px', color: '#f1f5f9',
+          fontFamily: 'Inter, sans-serif',
+          '::placeholder': { color: '#475569' }
+        },
+        invalid: { color: '#ef4444' }
+      }
+    });
+  } catch(e) { console.error('Stripe init error:', e); }
+}
+
+// ===== FILE UPLOAD =====
+document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('uploadZone').addEventListener('dragover', e => {
+  e.preventDefault();
+  document.getElementById('uploadZone').style.borderColor = 'var(--accent)';
+});
+document.getElementById('uploadZone').addEventListener('dragleave', () => {
+  document.getElementById('uploadZone').style.borderColor = '';
+});
+document.getElementById('uploadZone').addEventListener('drop', e => {
+  e.preventDefault();
+  document.getElementById('uploadZone').style.borderColor = '';
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) handleFile(e.target.files[0]);
+});
+
+function handleFile(file) {
+  currentFile = file;
+  const pill = document.getElementById('filePill');
+  pill.style.display = 'block';
+  pill.textContent = '✓ ' + file.name;
+  document.getElementById('btnContinue').disabled = false;
+}
+
+document.getElementById('contractText').addEventListener('input', e => {
+  document.getElementById('btnContinue').disabled = e.target.value.trim().length < 20;
+});
+
+// ===== START BUTTON =====
+document.getElementById('btnStart').addEventListener('click', () => {
+  if (!selectedType) return;
+  const ct = CONTRACT_TYPES[selectedType];
+  
+  // Show expert banner
+  document.getElementById('expertBanner').innerHTML = `
+    <div class="expert-avatar">${ct.emoji}</div>
+    <div>
+      <div class="expert-name">${ct.expert}</div>
+      <div class="expert-title">${ct.title}</div>
+      <div class="expert-exp">🏛️ ${ct.exp}</div>
+    </div>`;
+
+  showScreen('upload');
+  initStripe();
+});
+
+// ===== CONTINUE TO PAYMENT =====
+document.getElementById('btnContinue').addEventListener('click', () => {
+  const text = document.getElementById('contractText').value.trim();
+  if (!text && !currentFile) {
+    alert('Por favor sube un archivo o pega el texto');
+    return;
+  }
+  const ct = CONTRACT_TYPES[selectedType];
+  document.getElementById('paymentTitle').textContent = ct.name + ' · ' + ct.emoji;
+  showScreen('payment');
+  setTimeout(() => {
+    try {
+      if (cardEl) cardEl.mount('#card-element');
+    } catch(e) {}
+  }, 150);
+});
+
+// ===== PAY BUTTON =====
+document.getElementById('btnPay').addEventListener('click', async () => {
+  const btn = document.getElementById('btnPay');
+  const errorBox = document.getElementById('errorBox');
+  const code = (document.getElementById('adminCode').value || '').trim();
+
+  // Admin bypass: salta Stripe, analiza gratis
+  if (code === ADMIN_CODE) {
+    btn.disabled = true;
+    btn.textContent = '✅ Acceso admin concedido...';
+    startAnalysis();
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ Verificando...';
+  errorBox.style.display = 'none';
+
+  try {
+    if (!stripe || !cardEl) throw new Error('Stripe no inicializado. Recarga la página.');
+    const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card: cardEl });
+    if (error) throw new Error(error.message);
+    console.log('Payment OK:', paymentMethod.id);
+    startAnalysis();
+  } catch(e) {
+    console.error('Payment error:', e);
+    errorBox.style.display = 'block';
+    errorBox.textContent = '❌ ' + (e.message || 'Error en el pago');
+    btn.disabled = false;
+    btn.textContent = '🔒 Pagar 25€ y analizar';
+  }
+});
+
+// ===== ANALYSIS =====
+async function startAnalysis() {
+  showScreen('loading');
+  const ct = CONTRACT_TYPES[selectedType];
+  document.getElementById('loadingTitle').textContent = 'Analizando con ' + ct.expert;
+  document.getElementById('loadingSub').textContent = ct.title + ' está revisando tu contrato...';
+  startSteps();
+
+  try {
+    let text = document.getElementById('contractText').value.trim();
+    if (!text && currentFile) text = await readFile(currentFile);
+    if (!text || text.length < 20) throw new Error('Texto del contrato demasiado corto');
+
+    const result = await callClaude(text, selectedLang, ct.system(selectedLang));
+    analysisResult = result;
+    renderResults(result);
+    showScreen('results');
+  } catch(e) {
+    clearSteps();
+    console.error('Analysis error:', e);
+    alert('❌ Error:\n\n' + (e.message || 'Error desconocido'));
+    showScreen('payment');
+    document.getElementById('btnPay').disabled = false;
+    document.getElementById('btnPay').textContent = '🔒 Pagar 25€ y analizar';
+  }
+}
+
+function readFile(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = e => resolve(e.target.result);
+    r.onerror = () => reject(new Error('Error leyendo archivo'));
+    r.readAsText(file);
+  });
+}
+
+// ===== CLAUDE API (llamada directa desde frontend) =====
+async function callClaude(text, lang, system) {
+  const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 3500,
+      system,
+      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}:\n\n${text.substring(0, 8000)}` }]
+    })
+  });
+
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(`Error API (${resp.status}): ${err.error?.message || 'Comprueba la API key'}`);
+  }
+
+  const data = await resp.json();
+  const raw = data.content?.[0]?.text || '';
+  const match = raw.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('Sin respuesta JSON de la IA');
+
+  try { return JSON.parse(match[0]); }
+  catch(e) { throw new Error('Error parseando respuesta de la IA'); }
+}
+
+// ===== RENDER =====
+function renderResults(a) {
+  const level = (a.risk_level || 'MODERADO').toLowerCase().replace(' ', '-');
+  const emojis = { 'bajo':'🟢', 'moderado':'🟡', 'alto':'🟠', 'muy-alto':'🔴', 'muy alto':'🔴' };
+  
+  document.getElementById('resultHero').className = 'result-hero ' + level;
+  document.getElementById('resultEmoji').textContent = emojis[level] || '⚪';
+  document.getElementById('resultLevel').textContent = a.risk_level || 'N/A';
+  document.getElementById('resultScore').textContent = `Puntuación de riesgo: ${a.risk_score || 0}/100`;
+  document.getElementById('resultSummary').textContent = a.summary || '';
+
+  // RTL for Arabic
+  if (selectedLang === 'Arabic') {
+    document.getElementById('resultSummary').style.direction = 'rtl';
+    document.getElementById('resultSummary').style.textAlign = 'right';
+  }
+
+  if (a.risks?.length) {
+    document.getElementById('risksList').innerHTML = a.risks.map(r => {
+      const sev = (r.severity || 'warning').toLowerCase();
+      const sevLabel = { critical: 'CRÍTICO', moderate: 'MODERADO', warning: 'AVISO' }[sev] || sev;
+      return `<div class="result-card ${sev}">
+        <div class="card-header">
+          <div class="card-title">${r.title}</div>
+          <div class="sev-badge ${sev}">${sevLabel}</div>
+        </div>
+        <div class="card-desc">${r.description}</div>
+        ${r.law_ref ? `<div class="card-law">📜 ${r.law_ref}</div>` : ''}
+        ${r.action ? `<div class="card-action">→ ${r.action}</div>` : ''}
+      </div>`;
+    }).join('');
+    document.getElementById('risksSection').style.display = 'block';
+  }
+
+  if (a.positives?.length) {
+    document.getElementById('posList').innerHTML = a.positives.map(p =>
+      `<div class="result-card positive">
+        <div class="card-title">✅ ${p.title}</div>
+        <div class="card-desc" style="margin-top:6px">${p.description}</div>
+      </div>`
+    ).join('');
+    document.getElementById('posSection').style.display = 'block';
+  }
+
+  if (a.letter) {
+    const letterEl = document.getElementById('letterBody');
+    letterEl.textContent = a.letter;
+    if (selectedLang === 'Arabic') {
+      letterEl.style.direction = 'rtl';
+      letterEl.style.textAlign = 'right';
+    }
+    document.getElementById('letterSection').style.display = 'block';
+  }
+}
+
+// ===== DOWNLOAD =====
+document.getElementById('btnDownload').addEventListener('click', () => {
+  if (!analysisResult) return;
+  const a = analysisResult;
+  const ct = CONTRACT_TYPES[selectedType];
+  const content = `VERIDEX — INFORME DE ANÁLISIS LEGAL IA
+Fecha: ${new Date().toLocaleString('es-ES')}
+Tipo: ${ct.name} | Experto: ${ct.expert}
+Nivel de riesgo: ${a.risk_level} (${a.risk_score}/100)
+Idioma: ${selectedLang}
+
+━━━ RESUMEN ━━━
+${a.summary}
+
+━━━ RIESGOS DETECTADOS ━━━
+${a.risks?.map(r => `[${r.severity}] ${r.title}
+${r.description}
+Referencia legal: ${r.law_ref || 'N/A'}
+Acción recomendada: ${r.action || 'N/A'}`).join('\n\n')}
+
+━━━ ASPECTOS POSITIVOS ━━━
+${a.positives?.map(p => `✓ ${p.title}: ${p.description}`).join('\n')}
+
+━━━ CARTA LEGAL ━━━
+${a.letter}
+
+━━━━━━━━━━━━━━━━━━━━
+VERIDEX © ${new Date().getFullYear()} | IA Legal Global
+Este análisis es orientativo y no sustituye asesoramiento jurídico profesional.`;
+
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `VERIDEX_${ct.name.replace(/ /g,'_')}_${Date.now()}.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
+});
+
+// ===== COPY =====
+document.getElementById('btnCopy').addEventListener('click', () => {
+  if (!analysisResult) return;
+  const a = analysisResult;
+  const text = `${a.risk_level} (${a.risk_score}/100)\n\n${a.summary}\n\n${a.letter}`;
+  navigator.clipboard.writeText(text).then(() => {
+    document.getElementById('btnCopy').textContent = '✅ Copiado';
+    setTimeout(() => document.getElementById('btnCopy').textContent = '📋 Copiar', 2000);
+  });
+});
+
+// ===== NEW ANALYSIS =====
+document.getElementById('btnNew').addEventListener('click', () => {
+  currentFile = null;
+  analysisResult = null;
+  selectedType = null;
+  document.getElementById('contractText').value = '';
+  document.getElementById('filePill').style.display = 'none';
+  document.getElementById('btnContinue').disabled = true;
+  document.getElementById('risksSection').style.display = 'none';
+  document.getElementById('posSection').style.display = 'none';
+  document.getElementById('letterSection').style.display = 'none';
+  document.getElementById('errorBox').style.display = 'none';
+  document.getElementById('btnPay').disabled = false;
+  document.getElementById('btnPay').textContent = '🔒 Pagar 25€ y analizar';
+  document.querySelectorAll('.contract-card').forEach(c => c.classList.remove('selected'));
+  document.getElementById('btnStart').disabled = true;
+  document.getElementById('btnStart').textContent = 'Selecciona un tipo de contrato';
+  showScreen('welcome');
+});
+
+// ===== STEPS =====
+function startSteps() {
+  clearSteps();
+  const ids = ['step1','step2','step3','step4','step5'];
+  ids.forEach(id => document.getElementById(id).className = 'step-row');
+  document.getElementById('step1').className = 'step-row active';
+  ids.forEach((id, i) => {
+    if (i === 0) return;
+    const t = setTimeout(() => {
+      document.getElementById(ids[i-1]).className = 'step-row done';
+      document.getElementById(id).className = 'step-row active';
+    }, i * 5000);
+    stepTimers.push(t);
+  });
+}
+
+function clearSteps() {
+  stepTimers.forEach(t => clearTimeout(t));
+  stepTimers = [];
+}
+
+
+// ===== OCR CÁMARA =====
+function scanWithCamera() {
+  document.getElementById('cameraInput').click();
+}
+
+document.getElementById('cameraInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const btn = document.getElementById('btnOCR');
+  const progress = document.getElementById('ocrProgress');
+  btn.disabled = true;
+  btn.textContent = '⏳ Procesando imagen...';
+  progress.style.display = 'block';
+  progress.textContent = '📷 Iniciando OCR...';
+
+  try {
+    const worker = await Tesseract.createWorker('spa+eng', 1, {
+      logger: m => {
+        if (m.status === 'recognizing text') {
+          progress.textContent = `🔍 OCR: ${Math.round((m.progress||0)*100)}% completado...`;
+        }
+      }
+    });
+
+    const { data: { text } } = await worker.recognize(file);
+    await worker.terminate();
+
+    const cleaned = text.trim();
+    if (cleaned.length < 20) throw new Error('No se extrajo texto suficiente. Intenta con imagen más nítida.');
+
+    const ta = document.getElementById('contractText');
+    ta.value = cleaned;
+    ta.dispatchEvent(new Event('input'));
+
+    progress.style.display = 'none';
+    btn.disabled = false;
+    btn.textContent = '✅ Texto extraído correctamente';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color = 'var(--accent)';
+    ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  } catch(err) {
+    progress.style.display = 'none';
+    btn.disabled = false;
+    btn.textContent = '📸 Escanear contrato con la cámara';
+    alert('❌ Error OCR: ' + (err.message || 'Inténtalo de nuevo'));
+  }
+  e.target.value = '';
+});
+
+// ===== INIT =====
+window.addEventListener('load', () => {
+  try { initStripe(); } catch(e) { console.error('Stripe:', e); }
+  console.log('✅ VERIDEX loaded');
+});
+</script>
+</body>
+</html>
