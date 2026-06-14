@@ -1173,7 +1173,7 @@ document.getElementById('btnContinue').addEventListener('click', () => {
   // Si tiene escaneo gratis disponible -> análisis DIRECTO sin pago
   if (isFreeScamAvailable()) {
     markFreeScanUsed();
-    startAnalysis({ isFree: true });
+    startAnalysis();
     return;
   }
 
@@ -1192,24 +1192,58 @@ document.getElementById('btnPay').addEventListener('click', async () => {
   const btn = document.getElementById('btnPay');
   const errorBox = document.getElementById('errorBox');
   const code = (document.getElementById('adminCode').value || '').trim();
+  errorBox.style.display = 'none';
 
-  // Admin bypass: el código se valida en el backend
+  // Admin bypass: verificar en el backend, nunca en el cliente
   if (code) {
     btn.disabled = true;
     btn.textContent = '⏳ Verificando código...';
-    startAnalysis({ adminCode: code });
+    try {
+      const r = await fetch('/api/verify-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+      const { valid } = await r.json();
+      if (!valid) throw new Error('Código de acceso inválido');
+      startAnalysis();
+    } catch(e) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = '❌ ' + (e.message || 'Error verificando código');
+      btn.disabled = false;
+      btn.textContent = '🔒 Pagar 25€ y analizar';
+    }
     return;
   }
 
+  // Flujo de pago con Stripe PaymentIntent
   btn.disabled = true;
-  btn.textContent = '⏳ Verificando...';
-  errorBox.style.display = 'none';
+  btn.textContent = '⏳ Preparando pago...';
 
   try {
     if (!stripe || !cardEl) throw new Error('Stripe no inicializado. Recarga la página.');
-    const { paymentMethod, error } = await stripe.createPaymentMethod({ type: 'card', card: cardEl });
+
+    // 1. Crear PaymentIntent en el servidor (guarda la secret key)
+    const piResp = await fetch('/api/create-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!piResp.ok) {
+      const err = await piResp.json().catch(() => ({}));
+      throw new Error(err.error || 'Error preparando el pago');
+    }
+    const { client_secret } = await piResp.json();
+
+    // 2. Confirmar el pago en el cliente con los datos de tarjeta
+    btn.textContent = '⏳ Procesando pago...';
+    const { paymentIntent, error } = await stripe.confirmCardPayment(client_secret, {
+      payment_method: { card: cardEl }
+    });
+
     if (error) throw new Error(error.message);
-    startAnalysis({ paymentMethodId: paymentMethod.id });
+    if (paymentIntent.status !== 'succeeded') throw new Error('El pago no se completó. Inténtalo de nuevo.');
+
+    startAnalysis();
   } catch(e) {
     console.error('Payment error:', e);
     errorBox.style.display = 'block';
@@ -1220,7 +1254,7 @@ document.getElementById('btnPay').addEventListener('click', async () => {
 });
 
 // ===== ANALYSIS =====
-async function startAnalysis({ isFree = false, adminCode = null, paymentMethodId = null } = {}) {
+async function startAnalysis() {
   showScreen('loading');
   const ct = CONTRACT_TYPES[selectedType];
   document.getElementById('loadingTitle').textContent = 'Analizando con ' + ct.expert;
@@ -1232,7 +1266,7 @@ async function startAnalysis({ isFree = false, adminCode = null, paymentMethodId
     if (!text && currentFile) text = await readFile(currentFile);
     if (!text || text.length < 20) throw new Error('Texto del contrato demasiado corto');
 
-    const result = await callBackend(text, selectedLang, selectedType, ct.system(selectedLang), { isFree, adminCode, paymentMethodId });
+    const result = await callAnalyze(text, selectedLang, ct.system(selectedLang));
     analysisResult = result;
     renderResults(result);
     showScreen('results');
@@ -1303,20 +1337,12 @@ async function readPDF(file) {
   }
 }
 
-// ===== BACKEND API (Netlify Function) =====
-async function callBackend(text, lang, contractType, systemPrompt, { isFree = false, adminCode = null, paymentMethodId = null } = {}) {
+// ===== BACKEND API (Netlify Functions) =====
+async function callAnalyze(text, lang, system) {
   const resp = await fetch('/api/analyze', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contractText: text.substring(0, 8000),
-      lang,
-      contractType,
-      systemPrompt,
-      isFree: isFree === true,
-      adminCode: adminCode || '',
-      paymentMethodId: paymentMethodId || ''
-    })
+    body: JSON.stringify({ text: text.substring(0, 8000), lang, system })
   });
 
   if (!resp.ok) {
