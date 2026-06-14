@@ -6,11 +6,6 @@
   NODE_VERSION = "18"
 
 [[redirects]]
-  from = "/api/poll"
-  to = "/.netlify/functions/poll"
-  status = 200
-
-[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
