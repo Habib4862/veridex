@@ -1155,7 +1155,7 @@ async function callClaude(text, lang, system) {
       model: 'claude-sonnet-4-6',
       max_tokens: 8000,
       system,
-      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin markdown, sin explicaciones. Solo el JSON.\n\nContrato:\n${text.substring(0, 8000)}` }]
+      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin markdown. Sé conciso en los textos para que el JSON no se trunque.\n\nContrato:\n${text.substring(0, 8000)}` }]
     })
   });
 
