@@ -1167,10 +1167,18 @@ async function readPDF(file) {
 
 // ===== CLAUDE API (llamada directa desde frontend) =====
 async function callClaude(text, lang, system) {
-  if (!ANTHROPIC_KEY || ANTHROPIC_KEY.length < 20) throw new Error('API key no configurada');
+  if (!ANTHROPIC_KEY || ANTHROPIC_KEY.length < 50) {
+    const msg = 'ERROR: API key no configurada. Longitud: ' + (ANTHROPIC_KEY ? ANTHROPIC_KEY.length : 0);
+    console.error(msg);
+    throw new Error(msg);
+  }
+  
+  console.log('callClaude iniciado - Model: claude-sonnet-4-6, Max tokens: 8000');
+  console.log('API key presente:', ANTHROPIC_KEY.substring(0, 20) + '...');
 
   let resp;
   try {
+    console.log('Enviando petición a Anthropic API...');
     resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -1182,45 +1190,124 @@ async function callClaude(text, lang, system) {
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
         max_tokens: 8000,
-        system,
-        messages: [{ role: 'user', content: 'Analiza este contrato en ' + lang + '. Responde SOLO con JSON valido, sin markdown ni texto extra.\n\nContrato:\n' + text }]
+        system: system,
+        messages: [{
+          role: 'user',
+          content: 'Analiza este contrato en ' + lang + '. Responde ÚNICAMENTE con un JSON válido, sin markdown ni texto extra.\n\nContrato:\n' + text.substring(0, 8000)
+        }]
       })
     });
+    
+    console.log('Respuesta recibida - Status:', resp.status);
+    
   } catch(netErr) {
-    throw new Error('Error de red: ' + netErr.message);
+    const msg = 'Error de red: ' + netErr.message;
+    console.error(msg);
+    throw new Error(msg);
   }
 
-  // Leer como texto primero para evitar "Unexpected end of JSON"
-  const rawText = await resp.text();
-  
+  // Leer respuesta como texto
+  let rawText = '';
+  try {
+    rawText = await resp.text();
+    console.log('Texto recibido (' + rawText.length + ' chars)');
+    if (rawText.length < 100) console.log('Contenido:', rawText);
+  } catch(e) {
+    throw new Error('No se pudo leer respuesta: ' + e.message);
+  }
+
+  // Verificar estado HTTP
   if (!resp.ok) {
+    console.error('HTTP error:', resp.status, rawText.substring(0, 200));
     let errMsg = 'Error API (' + resp.status + ')';
-    try { errMsg = JSON.parse(rawText).error?.message || errMsg; } catch(_) {}
+    try {
+      const errData = JSON.parse(rawText);
+      errMsg = errData.error?.message || errData.message || errMsg;
+    } catch(_) {}
     throw new Error(errMsg);
   }
 
-  if (!rawText || rawText.trim() === '') throw new Error('La IA no devolvio respuesta');
+  if (!rawText || rawText.trim() === '') {
+    throw new Error('La IA no devolvió respuesta (respuesta vacía)');
+  }
 
+  // Parse JSON response de Anthropic
   let apiData;
-  try { apiData = JSON.parse(rawText); } catch(e) { throw new Error('Respuesta invalida: ' + rawText.substring(0,100)); }
-
-  const raw = (apiData.content?.[0]?.text || '').trim();
-  if (!raw) throw new Error('Claude no devolvio contenido');
-
-  try { return JSON.parse(raw); } catch(_) {}
   try {
-    const s = raw.indexOf('{');
-    if (s !== -1) {
+    apiData = JSON.parse(rawText);
+    console.log('Response JSON parseado correctamente');
+  } catch(parseErr) {
+    console.error('Fallo parsear JSON:', rawText.substring(0, 200));
+    throw new Error('Respuesta no es JSON válido: ' + rawText.substring(0, 100));
+  }
+
+  // Extraer contenido de Claude
+  const raw = (apiData.content && apiData.content[0] && apiData.content[0].text) ? apiData.content[0].text.trim() : '';
+  
+  if (!raw) {
+    console.error('apiData:', JSON.stringify(apiData));
+    throw new Error('Claude no devolvió contenido en response');
+  }
+
+  console.log('Contenido de Claude (' + raw.length + ' chars)');
+
+  // Intento 1: JSON puro
+  try {
+    const result = JSON.parse(raw);
+    console.log('JSON parseado en intento 1');
+    return result;
+  } catch(_) {
+    console.log('Intento 1 falló, buscando JSON válido en respuesta...');
+  }
+
+  // Intento 2: Extraer primer objeto JSON con balance de llaves
+  try {
+    const start = raw.indexOf('{');
+    if (start !== -1) {
       let depth = 0, end = -1;
-      for (let i = s; i < raw.length; i++) {
+      for (let i = start; i < raw.length; i++) {
         if (raw[i] === '{') depth++;
-        else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+        else if (raw[i] === '}') {
+          depth--;
+          if (depth === 0) {
+            end = i;
+            break;
+          }
+        }
       }
-      if (end !== -1) return JSON.parse(raw.substring(s, end + 1));
+      if (end !== -1) {
+        const jsonStr = raw.substring(start, end + 1);
+        const result = JSON.parse(jsonStr);
+        console.log('JSON extraído y parseado en intento 2');
+        return result;
+      }
     }
-  } catch(_) {}
-  try { const m = raw.match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch(_) {}
-  throw new Error('No se pudo parsear respuesta: ' + raw.substring(0,100));
+  } catch(e) {
+    console.log('Intento 2 falló:', e.message);
+  }
+
+  // Intento 3: Regex para JSON
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    if (match) {
+      const result = JSON.parse(match[0]);
+      console.log('JSON extraído con regex en intento 3');
+      return result;
+    }
+  } catch(e) {
+    console.log('Intento 3 falló');
+  }
+
+  // Si todo falla, respuesta de emergencia
+  console.error('No se pudo extraer JSON. Raw:', raw.substring(0, 500));
+  return {
+    risk_level: 'DESCONOCIDO',
+    risk_score: 0,
+    summary: 'El análisis se interrumpió. Respuesta: ' + raw.substring(0, 200),
+    risks: [],
+    positives: [],
+    letter: 'No se pudo generar análisis completo.'
+  };
 }
 
 
