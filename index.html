@@ -1344,11 +1344,7 @@ async function callAnalyze(text, lang, system) {
     resp = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: text.substring(0, 3500),
-        lang,
-        system: system.substring(0, 1200)
-      })
+      body: JSON.stringify({ text, lang, system })
     });
   } catch(networkErr) {
     throw new Error('Error de red. Comprueba tu conexion e intentalo de nuevo.');

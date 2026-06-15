@@ -17,12 +17,12 @@ exports.handler = async (event) => {
 
   let body;
   try { body = JSON.parse(event.body || '{}'); }
-  catch(e) { return respond(400, { error: 'JSON invalido' }); }
+  catch(e) { return respond(400, { error: 'JSON invalido en el body' }); }
 
   const { text, lang, system } = body;
 
   if (!text || text.length < 10) return respond(400, { error: 'Texto demasiado corto' });
-  if (!lang)   return respond(400, { error: 'Falta el idioma' });
+  if (!lang)   return respond(400, { error: 'Falta el idioma (lang)' });
   if (!system) return respond(400, { error: 'Falta el system prompt' });
   if (!process.env.ANTHROPIC_API_KEY) return respond(500, { error: 'ANTHROPIC_API_KEY no configurada en Netlify' });
 
@@ -36,11 +36,11 @@ exports.handler = async (event) => {
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 4000,
-        system: system.substring(0, 2000),
+        max_tokens: 8000,
+        system: system,
         messages: [{
           role: 'user',
-          content: 'Analiza este contrato en ' + lang + '. Responde SOLO con un objeto JSON valido, sin markdown, sin texto extra.\n\nContrato:\n' + text.substring(0, 6000)
+          content: 'Analiza este contrato en ' + lang + '. Responde SOLO con un objeto JSON valido, sin markdown, sin texto extra.\n\nContrato:\n' + text
         }]
       })
     });
@@ -82,10 +82,10 @@ function parseJSON(raw) {
   try { const m = raw.match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch (_) {}
   return {
     risk_level: 'MODERADO', risk_score: 50,
-    summary: 'No se pudo completar el analisis. Intenta con menos texto.',
-    risks: [{ title: 'Analisis incompleto', description: 'Reduce el texto del contrato.', law_ref: '', severity: 'WARNING', action: 'Pega menos de 2000 caracteres.' }],
+    summary: 'No se pudo completar el analisis. Intentalo de nuevo.',
+    risks: [{ title: 'Analisis incompleto', description: 'Hubo un error procesando el contrato.', law_ref: '', severity: 'WARNING', action: 'Intentalo de nuevo.' }],
     positives: [],
-    letter: 'No se pudo generar la carta. Acorta el texto.'
+    letter: 'No se pudo generar la carta. Intentalo de nuevo.'
   };
 }
 
