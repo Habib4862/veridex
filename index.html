@@ -1167,74 +1167,62 @@ async function readPDF(file) {
 
 // ===== CLAUDE API (llamada directa desde frontend) =====
 async function callClaude(text, lang, system) {
-  const resp = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 8000,
-      system,
-      messages: [{ role: 'user', content: `Analiza este contrato en ${lang}. IMPORTANTE: Responde ÚNICAMENTE con un objeto JSON válido, sin markdown. Sé conciso en los textos para que el JSON no se trunque.\n\nContrato:\n${text.substring(0, 8000)}` }]
-    })
-  });
+  if (!ANTHROPIC_KEY || ANTHROPIC_KEY.length < 20) throw new Error('API key no configurada');
 
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(`Error API (${resp.status}): ${err.error?.message || 'Comprueba la API key'}`);
+  let resp;
+  try {
+    resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 8000,
+        system,
+        messages: [{ role: 'user', content: 'Analiza este contrato en ' + lang + '. Responde SOLO con JSON valido, sin markdown ni texto extra.\n\nContrato:\n' + text }]
+      })
+    });
+  } catch(netErr) {
+    throw new Error('Error de red: ' + netErr.message);
   }
 
-  const data = await resp.json();
-  const raw = (data.content?.[0]?.text || '').trim();
+  // Leer como texto primero para evitar "Unexpected end of JSON"
+  const rawText = await resp.text();
+  
+  if (!resp.ok) {
+    let errMsg = 'Error API (' + resp.status + ')';
+    try { errMsg = JSON.parse(rawText).error?.message || errMsg; } catch(_) {}
+    throw new Error(errMsg);
+  }
 
-  if (!raw) throw new Error('La IA no devolvió respuesta. Inténtalo de nuevo.');
+  if (!rawText || rawText.trim() === '') throw new Error('La IA no devolvio respuesta');
 
-  // Intento 1: JSON directo
+  let apiData;
+  try { apiData = JSON.parse(rawText); } catch(e) { throw new Error('Respuesta invalida: ' + rawText.substring(0,100)); }
+
+  const raw = (apiData.content?.[0]?.text || '').trim();
+  if (!raw) throw new Error('Claude no devolvio contenido');
+
   try { return JSON.parse(raw); } catch(_) {}
-
-  // Intento 2: extraer primer bloque JSON con balance de llaves
   try {
-    const start = raw.indexOf('{');
-    if (start !== -1) {
+    const s = raw.indexOf('{');
+    if (s !== -1) {
       let depth = 0, end = -1;
-      for (let i = start; i < raw.length; i++) {
+      for (let i = s; i < raw.length; i++) {
         if (raw[i] === '{') depth++;
         else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
       }
-      if (end !== -1) return JSON.parse(raw.substring(start, end + 1));
+      if (end !== -1) return JSON.parse(raw.substring(s, end + 1));
     }
   } catch(_) {}
-
-  // Intento 3: regex
-  try {
-    const match = raw.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-  } catch(_) {}
-
-  // Si todo falla, mostrar los primeros caracteres para depurar
-  console.error('Respuesta raw de Claude:', raw.substring(0, 500));
-  // JSON truncado por límite de tokens — construir respuesta de emergencia
-console.warn('JSON truncado, construyendo respuesta parcial:', raw.substring(0, 200));
-const emergencia = {
-  risk_level: 'MODERADO',
-  risk_score: 50,
-  summary: 'El análisis fue interrumpido por la longitud del contrato. Por favor, pega solo las cláusulas más importantes (máx. 3000 caracteres) para obtener un análisis completo.',
-  risks: [{
-    title: 'Análisis incompleto',
-    description: 'El contrato es demasiado largo para analizarlo de una vez. Pega las cláusulas principales o el texto más relevante.',
-    law_ref: '',
-    severity: 'WARNING',
-    action: 'Acorta el texto del contrato y vuelve a intentarlo.'
-  }],
-  positives: [],
-  letter: 'No se pudo generar la carta legal por la longitud del contrato. Acorta el texto e inténtalo de nuevo.'
-};
-return emergencia;
+  try { const m = raw.match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch(_) {}
+  throw new Error('No se pudo parsear respuesta: ' + raw.substring(0,100));
 }
+
 
 // ===== RENDER =====
 function renderResults(a) {
