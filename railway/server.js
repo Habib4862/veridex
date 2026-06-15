@@ -1,23 +1,42 @@
-const express  = require('express');
-const cors     = require('cors');
-const app      = express();
+const express = require('express');
+const cors    = require('cors');
+const app     = express();
 
-app.use(cors());
+// CORS — acepta peticiones desde cualquier origen
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Preflight OPTIONS global
+app.options('*', cors());
+
 app.use(express.json({ limit: '50mb' }));
 
-// ─── HEALTH CHECK ────────────────────────────────────────────
-app.get('/', (req, res) => res.json({ status: 'VERIDEX API OK', model: 'claude-sonnet-4-6' }));
+// Log de todas las peticiones
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} — origin: ${req.headers.origin || 'none'}`);
+  next();
+});
 
-// ─── ANALYZE ─────────────────────────────────────────────────
+// HEALTH CHECK
+app.get('/', (req, res) => {
+  res.json({ status: 'VERIDEX API OK', model: 'claude-sonnet-4-6', port: process.env.PORT || 3000 });
+});
+
+// ANALYZE
 app.post('/api/analyze', async (req, res) => {
   const { text, lang, system } = req.body || {};
+  console.log(`analyze: lang=${lang}, text_len=${text ? text.length : 0}`);
 
   if (!text || text.length < 10) return res.status(400).json({ error: 'Texto demasiado corto' });
-  if (!lang)   return res.status(400).json({ error: 'Falta el idioma (lang)' });
-  if (!system) return res.status(400).json({ error: 'Falta el system prompt' });
+  if (!lang)   return res.status(400).json({ error: 'Falta lang' });
+  if (!system) return res.status(400).json({ error: 'Falta system' });
   if (!process.env.ANTHROPIC_API_KEY) return res.status(500).json({ error: 'ANTHROPIC_API_KEY no configurada' });
 
   try {
+    console.log('Llamando a Anthropic...');
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -29,99 +48,75 @@ app.post('/api/analyze', async (req, res) => {
         model: 'claude-sonnet-4-6',
         max_tokens: 8000,
         system: system,
-        messages: [{
-          role: 'user',
-          content: 'Analiza este contrato en ' + lang + '. Responde SOLO con un objeto JSON valido, sin markdown, sin texto extra.\n\nContrato:\n' + text
-        }]
+        messages: [{ role: 'user', content: 'Analiza este contrato en ' + lang + '. Responde SOLO JSON valido, sin markdown.\n\n' + text }]
       })
     });
 
+    console.log('Anthropic status:', resp.status);
+
     if (!resp.ok) {
       const errData = await resp.json().catch(() => ({}));
-      return res.status(502).json({ error: (errData.error && errData.error.message) || 'Error Anthropic ' + resp.status });
+      const msg = (errData.error && errData.error.message) || 'Error Anthropic ' + resp.status;
+      console.error('Anthropic error:', msg);
+      return res.status(502).json({ error: msg });
     }
 
     const apiData = await resp.json();
     const raw = (apiData.content && apiData.content[0] && apiData.content[0].text)
       ? apiData.content[0].text.trim() : '';
 
-    if (!raw) return res.status(502).json({ error: 'Respuesta vacia de la IA' });
+    console.log('Raw length:', raw.length, '| First 100:', raw.substring(0, 100));
+
+    if (!raw) return res.status(502).json({ error: 'Respuesta vacia de Anthropic' });
 
     return res.json(parseJSON(raw));
 
   } catch (e) {
-    console.error('analyze error:', e.message);
+    console.error('Error en /api/analyze:', e.message);
     return res.status(500).json({ error: e.message || 'Error interno' });
   }
 });
 
-// ─── VERIFY ADMIN ────────────────────────────────────────────
+// VERIFY ADMIN
 app.post('/api/verify-admin', (req, res) => {
   const { code } = req.body || {};
-  const valid = typeof code === 'string' && code.length > 0 && code === process.env.ADMIN_CODE;
-  res.json({ valid });
+  res.json({ valid: typeof code === 'string' && code === process.env.ADMIN_CODE });
 });
 
-// ─── CREATE PAYMENT ──────────────────────────────────────────
+// CREATE PAYMENT
 app.post('/api/create-payment', async (req, res) => {
   if (!process.env.STRIPE_SECRET_KEY) return res.status(500).json({ error: 'STRIPE_SECRET_KEY no configurada' });
   try {
-    const resp = await fetch('https://api.stripe.com/v1/payment_intents', {
+    const r = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',
       headers: {
         'Authorization': 'Bearer ' + process.env.STRIPE_SECRET_KEY,
         'Content-Type': 'application/x-www-form-urlencoded'
       },
-      body: new URLSearchParams({
-        amount: '2500',
-        currency: 'eur',
-        'automatic_payment_methods[enabled]': 'true'
-      }).toString()
+      body: 'amount=2500&currency=eur&automatic_payment_methods[enabled]=true'
     });
-    const data = await resp.json();
-    if (!resp.ok) throw new Error((data.error && data.error.message) || 'Error Stripe');
+    const data = await r.json();
+    if (!r.ok) throw new Error((data.error && data.error.message) || 'Error Stripe');
     res.json({ client_secret: data.client_secret });
   } catch (e) {
-    res.status(500).json({ error: e.message || 'Error interno' });
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ─── FEEDBACK (guarda en memoria — opcional DB después) ───────
-const feedbacks = [];
-app.post('/api/feedback', (req, res) => {
-  const fb = { ...req.body, received_at: new Date().toISOString() };
-  feedbacks.push(fb);
-  console.log('FEEDBACK:', JSON.stringify(fb));
-  res.json({ ok: true });
-});
-
-app.get('/api/feedback', (req, res) => {
-  res.json({ total: feedbacks.length, feedbacks });
-});
-
-// ─── PARSE JSON ROBUSTO ───────────────────────────────────────
 function parseJSON(raw) {
   try { return JSON.parse(raw); } catch (_) {}
   try {
-    const s = raw.indexOf('{');
-    if (s !== -1) {
-      let depth = 0, end = -1;
-      for (let i = s; i < raw.length; i++) {
+    let depth = 0, start = raw.indexOf('{'), end = -1;
+    if (start !== -1) {
+      for (let i = start; i < raw.length; i++) {
         if (raw[i] === '{') depth++;
         else if (raw[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
       }
-      if (end !== -1) return JSON.parse(raw.substring(s, end + 1));
+      if (end !== -1) return JSON.parse(raw.substring(start, end + 1));
     }
   } catch (_) {}
-  try { const m = raw.match(/\{[\s\S]*\}/); if (m) return JSON.parse(m[0]); } catch (_) {}
-  return {
-    risk_level: 'MODERADO', risk_score: 50,
-    summary: 'No se pudo parsear el analisis. Intentalo de nuevo.',
-    risks: [{ title: 'Error de analisis', description: 'Hubo un problema procesando la respuesta.', law_ref: '', severity: 'WARNING', action: 'Intentalo de nuevo.' }],
-    positives: [],
-    letter: 'No se pudo generar la carta. Intentalo de nuevo.'
-  };
+  return { risk_level: 'MODERADO', risk_score: 50, summary: 'Error parseando respuesta.', risks: [], positives: [], letter: '' };
 }
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log('VERIDEX API corriendo en puerto ' + PORT));
+app.listen(PORT, '0.0.0.0', () => console.log(`VERIDEX API corriendo en puerto ${PORT}`));
