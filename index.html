@@ -1337,31 +1337,50 @@ async function readPDF(file) {
   }
 }
 
-// ===== BACKEND API (directa — Haiku responde en 5-8s) =====
+// ===== BACKEND API (Haiku directo — 5-8s) =====
 async function callAnalyze(text, lang, system) {
-  const resp = await fetch('/api/analyze-background', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      text: text.substring(0, 4000),
-      lang,
-      system: system.substring(0, 1200)
-    })
-  });
-
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({}));
-    throw new Error(err.error || ('Error del servidor (' + resp.status + ')'));
+  let resp;
+  try {
+    resp = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        text: text.substring(0, 3500),
+        lang,
+        system: system.substring(0, 1200)
+      })
+    });
+  } catch(networkErr) {
+    throw new Error('Error de red. Comprueba tu conexion e intentalo de nuevo.');
   }
 
-  const data = await resp.json();
+  // Leer body como texto primero para evitar "Unexpected end of JSON"
+  const rawText = await resp.text();
+
+  if (!rawText || rawText.trim() === '') {
+    throw new Error('Respuesta vacia del servidor (codigo ' + resp.status + '). Intentalo de nuevo.');
+  }
+
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch(e) {
+    // La respuesta no es JSON (puede ser HTML de error de Netlify)
+    if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
+      throw new Error('Error del servidor ' + resp.status + '. Intentalo en unos segundos.');
+    }
+    throw new Error('Respuesta invalida del servidor: ' + rawText.substring(0, 100));
+  }
+
+  if (!resp.ok) {
+    throw new Error(data.error || ('Error del servidor (' + resp.status + ')'));
+  }
+
+  // El backend devuelve el JSON del analisis directamente
   if (data.risk_level) return data;
 
-  const raw = (data.content && data.content[0] ? data.content[0].text : '') || JSON.stringify(data);
-  const match = raw.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('Respuesta inesperada del servidor');
-  try { return JSON.parse(match[0]); }
-  catch(e) { throw new Error('Error parseando respuesta'); }
+  // Fallback por si acaso
+  throw new Error('Respuesta inesperada. Intentalo de nuevo.');
 }
 
 // ===== RENDER =====

@@ -5,6 +5,25 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Ruta explicita para la funcion de analisis
+[[redirects]]
+  from = "/api/analyze"
+  to = "/.netlify/functions/analyze"
+  status = 200
+
+# Ruta para verify-admin
+[[redirects]]
+  from = "/api/verify-admin"
+  to = "/.netlify/functions/verify-admin"
+  status = 200
+
+# Ruta para create-payment
+[[redirects]]
+  from = "/api/create-payment"
+  to = "/.netlify/functions/create-payment"
+  status = 200
+
+# Comodin para el resto
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
