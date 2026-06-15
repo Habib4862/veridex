@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install"
+
+[deploy]
+startCommand = "npm start"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services.veridex-api.volumes]]
+name = "logs"
+mount_path = "/app/logs"
