@@ -1345,47 +1345,42 @@ async function readPDF(file) {
 
 // ===== BACKEND API (Railway sin límites / Netlify fallback) =====
 async function callAnalyze(text, lang, system) {
-  const BASE = (typeof RAILWAY_URL !== 'undefined' && RAILWAY_URL) ? RAILWAY_URL : '';
+  // Railway URL hardcodeada — sin fallback a Netlify Functions
+  const RAILWAY_API = 'https://veridex-production-5bca.up.railway.app';
   let resp;
   try {
-    resp = await fetch(BASE + '/api/analyze', {
+    resp = await fetch(RAILWAY_API + '/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, lang, system })
     });
   } catch(networkErr) {
-    throw new Error('Error de red. Comprueba tu conexion e intentalo de nuevo.');
+    throw new Error('Error de red conectando a Railway. Comprueba tu conexion.');
   }
 
-  // Leer body como texto primero para evitar "Unexpected end of JSON"
   const rawText = await resp.text();
 
   if (!rawText || rawText.trim() === '') {
-    throw new Error('Respuesta vacia del servidor (codigo ' + resp.status + '). Intentalo de nuevo.');
-  }
-
-  let data;
-  try {
-    data = JSON.parse(rawText);
-  } catch(e) {
-    // La respuesta no es JSON (puede ser HTML de error de Netlify)
-    if (rawText.includes('<!DOCTYPE') || rawText.includes('<html')) {
-      throw new Error('Error del servidor ' + resp.status + '. Intentalo en unos segundos.');
-    }
-    throw new Error('Respuesta invalida del servidor: ' + rawText.substring(0, 100));
+    throw new Error('Respuesta vacia del servidor Railway');
   }
 
   if (!resp.ok) {
-    throw new Error(data.error || ('Error del servidor (' + resp.status + ')'));
+    let errMsg = 'Error del servidor (' + resp.status + ')';
+    try { errMsg = JSON.parse(rawText).error || errMsg; } catch(_) {}
+    throw new Error(errMsg);
   }
 
-  // El backend devuelve el JSON del analisis directamente
-  if (data.risk_level) return data;
-
-  // Fallback por si acaso
-  throw new Error('Respuesta inesperada. Intentalo de nuevo.');
+  try {
+    return JSON.parse(rawText);
+  } catch(e) {
+    const match = rawText.match(/\{[\s\S]*\}/);
+    if (match) {
+      try { return JSON.parse(match[0]); } catch(_) {}
+    }
+    console.error('Raw response:', rawText.substring(0, 200));
+    throw new Error('Respuesta invalida del servidor: ' + rawText.substring(0, 100));
+  }
 }
-
 // ===== RENDER =====
 function renderResults(a) {
   resetFeedback();  // mostrar feedback limpio en cada resultado
