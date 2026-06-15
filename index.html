@@ -1343,11 +1343,12 @@ async function readPDF(file) {
   }
 }
 
-// ===== BACKEND API (Haiku directo — 5-8s) =====
+// ===== BACKEND API (Railway sin límites / Netlify fallback) =====
 async function callAnalyze(text, lang, system) {
+  const BASE = (typeof RAILWAY_URL !== 'undefined' && RAILWAY_URL) ? RAILWAY_URL : '';
   let resp;
   try {
-    resp = await fetch('/api/analyze', {
+    resp = await fetch(BASE + '/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, lang, system })
