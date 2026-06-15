@@ -31,7 +31,7 @@ exports.handler = async (event) => {
   if (!process.env.ANTHROPIC_API_KEY) return respond(500, { error: 'API key no configurada en Netlify' });
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8500);
+  const timer = setTimeout(() => controller.abort(), 25000);
 
   try {
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
@@ -43,12 +43,12 @@ exports.handler = async (event) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        system: system.substring(0, 1200),
+        model: 'claude-sonnet-4-6',
+        max_tokens: 4000,
+        system: system.substring(0, 2000),
         messages: [{
           role: 'user',
-          content: 'Analiza este contrato en ' + lang + '. Responde SOLO con un objeto JSON valido, sin markdown, sin texto extra, sin explicaciones.\n\nContrato:\n' + text.substring(0, 3500)
+          content: 'Analiza este contrato en ' + lang + '. Responde SOLO con un objeto JSON valido, sin markdown, sin texto extra, sin explicaciones.\n\nContrato:\n' + text.substring(0, 6000)
         }]
       })
     });
