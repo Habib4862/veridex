@@ -1,9 +1,9 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm install"
+buildCommand = "cd railway && npm install"
 
 [deploy]
-startCommand = "npm start"
+startCommand = "cd railway && npm start"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
