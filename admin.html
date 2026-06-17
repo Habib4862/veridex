@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#04060b">
+<title>AXIOM — Panel de Control VERIDEX</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #04060b;
+  --surface: #0a0f1e;
+  --surface2: #111c30;
+  --border: rgba(6,182,212,0.25);
+  --cyan: #06b6d4;
+  --cyan-glow: rgba(6,182,212,0.5);
+  --gold: #f59e0b;
+  --gold-glow: rgba(245,158,11,0.45);
+  --green: #10b981;
+  --red: #ef4444;
+  --text: #e6f6fb;
+  --text2: #7d93a8;
+  --mono: 'Share Tech Mono', monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  background-image:
+    linear-gradient(rgba(6,182,212,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(6,182,212,0.06) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+/* ===== GATE ===== */
+#gate {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+}
+.gate-box {
+  width: min(360px, 90vw); background: var(--surface); border: 1px solid var(--border); border-radius: 4px;
+  padding: 32px 28px; text-align: center; box-shadow: 0 0 40px rgba(6,182,212,0.12);
+}
+.gate-logo { font-family: var(--mono); font-size: 28px; letter-spacing: 6px; color: var(--gold); text-shadow: 0 0 16px var(--gold-glow); }
+.gate-sub { font-size: 11px; letter-spacing: 3px; color: var(--cyan); margin-top: 6px; }
+.gate-box input {
+  width: 100%; margin-top: 22px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px;
+  padding: 12px 14px; color: var(--text); font-family: var(--mono); font-size: 14px; letter-spacing: 2px; text-align: center;
+}
+.gate-box input:focus { outline: none; border-color: var(--cyan); box-shadow: 0 0 12px var(--cyan-glow); }
+.gate-box button {
+  width: 100%; margin-top: 14px; padding: 12px; background: var(--cyan); color: #04060b; border: none; border-radius: 4px;
+  font-weight: 700; letter-spacing: 1px; cursor: pointer; font-family: 'Inter', sans-serif;
+}
+.gate-box button:hover { box-shadow: 0 0 18px var(--cyan-glow); }
+.gate-error { color: var(--red); font-size: 12px; margin-top: 12px; min-height: 14px; }
+
+/* ===== DASHBOARD ===== */
+#dashboard { display: none; max-width: 1400px; margin: 0 auto; padding: 20px 24px 60px; }
+
+.top-bar {
+  display: flex; align-items: center; justify-content: space-between; padding: 14px 0 22px; border-bottom: 1px solid var(--border); margin-bottom: 22px;
+}
+.brand { display: flex; align-items: baseline; gap: 14px; }
+.brand-axiom { font-family: var(--mono); font-size: 22px; letter-spacing: 5px; color: var(--gold); text-shadow: 0 0 14px var(--gold-glow); }
+.brand-veridex { font-size: 12px; letter-spacing: 3px; color: var(--cyan); border-left: 1px solid var(--border); padding-left: 14px; }
+#clock { font-family: var(--mono); font-size: 14px; color: var(--text2); letter-spacing: 1px; }
+
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid .span2 { grid-column: span 2; }
+.grid .span3 { grid-column: span 3; }
+@media (max-width: 900px) { .grid { grid-template-columns: 1fr; } .grid .span2, .grid .span3 { grid-column: span 1; } }
+
+.panel {
+  position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 18px 20px;
+}
+.panel::before, .panel::after {
+  content: ''; position: absolute; width: 10px; height: 10px; border: 1px solid var(--cyan); opacity: 0.7;
+}
+.panel::before { top: -1px; left: -1px; border-right: none; border-bottom: none; }
+.panel::after { bottom: -1px; right: -1px; border-left: none; border-top: none; }
+.panel-title {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 2px; color: var(--text2); text-transform: uppercase; margin-bottom: 14px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.badge-pending {
+  font-size: 9px; letter-spacing: 1px; color: var(--gold); border: 1px dashed var(--gold); border-radius: 3px; padding: 2px 6px;
+}
+.panel.pending { opacity: 0.55; border-style: dashed; }
+
+.status-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 13px; }
+.dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+.dot.bad { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+.big-number { font-family: var(--mono); font-size: 30px; color: var(--cyan); text-shadow: 0 0 14px var(--cyan-glow); }
+.big-number.gold { color: var(--gold); text-shadow: 0 0 14px var(--gold-glow); }
+.sub-label { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+.charge-list { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow-y: auto; }
+.charge-row { display: flex; justify-content: space-between; align-items: center; font-size: 12px; padding: 8px 10px; background: var(--surface2); border-radius: 3px; }
+.charge-amount { font-family: var(--mono); color: var(--text); }
+.charge-status { font-size: 9px; letter-spacing: 1px; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
+.charge-status.succeeded { background: rgba(16,185,129,0.15); color: var(--green); }
+.charge-status.failed { background: rgba(239,68,68,0.15); color: var(--red); }
+.charge-status.pending { background: rgba(245,158,11,0.15); color: var(--gold); }
+
+.empty-msg { font-size: 12px; color: var(--text2); padding: 10px 0; }
+.alert-ok { color: var(--green); font-family: var(--mono); font-size: 14px; }
+.alert-bad { color: var(--red); font-family: var(--mono); font-size: 14px; }
+
+.placeholder-fill { display: flex; align-items: center; justify-content: center; height: 100px; color: var(--text2); font-size: 12px; text-align: center; }
+
+#refreshNote { text-align: center; font-size: 11px; color: var(--text2); margin-top: 18px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="gate-box">
+    <div class="gate-logo">AXIOM</div>
+    <div class="gate-sub">PANEL DE CONTROL · VERIDEX</div>
+    <input id="codeInput" type="password" placeholder="CÓDIGO DE ACCESO" autocomplete="off">
+    <button id="btnEnter">ACCEDER</button>
+    <div class="gate-error" id="gateError"></div>
+  </div>
+</div>
+
+<div id="dashboard">
+  <div class="top-bar">
+    <div class="brand">
+      <div class="brand-axiom">AXIOM</div>
+      <div class="brand-veridex">VERIDEX · IA LEGAL GLOBAL</div>
+    </div>
+    <div id="clock">--:--:--</div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <div class="panel-title">Estado del Sistema</div>
+      <div id="statusRows"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Balance Stripe (disponible)</div>
+      <div class="big-number" id="balanceAvailable">—</div>
+      <div class="sub-label" id="balancePending">pendiente: —</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Alertas</div>
+      <div id="alertBox" class="alert-ok">0 Críticas</div>
+    </div>
+
+    <div class="panel span2">
+      <div class="panel-title">Últimos Cargos Stripe <span id="chargesTotalLabel"></span></div>
+      <div class="charge-list" id="chargeList"><div class="empty-msg">Cargando…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Consumo API Claude <span class="badge-pending">PENDIENTE</span></div>
+      <div class="placeholder-fill">Requiere tracking de tokens por request.<br>No implementado todavía.</div>
+    </div>
+
+    <div class="panel span2 pending">
+      <div class="panel-title">Actividad de Usuarios / Documentos <span class="badge-pending">PENDIENTE</span></div>
+      <div class="placeholder-fill">Requiere base de datos de usuarios y análisis (ej. Supabase).<br>No implementado todavía.</div>
+    </div>
+
+    <div class="panel pending">
+      <div class="panel-title">Histórico de Análisis Ejecutados <span class="badge-pending">PENDIENTE</span></div>
+      <div class="placeholder-fill">Requiere almacenamiento histórico de jobs.<br>No implementado todavía.</div>
+    </div>
+  </div>
+
+  <div id="refreshNote">Actualizado automáticamente cada 30s</div>
+</div>
+
+<script>
+let adminCode = '';
+
+document.getElementById('btnEnter').addEventListener('click', tryEnter);
+document.getElementById('codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') tryEnter(); });
+
+async function tryEnter() {
+  const code = document.getElementById('codeInput').value.trim();
+  const errEl = document.getElementById('gateError');
+  errEl.textContent = '';
+  if (!code) return;
+
+  try {
+    const resp = await fetch('/api/verify-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code })
+    });
+    const data = await resp.json();
+    if (!data.valid) {
+      errEl.textContent = 'Código incorrecto.';
+      return;
+    }
+    adminCode = code;
+    document.getElementById('gate').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    startClock();
+    loadDashboard();
+    setInterval(loadDashboard, 30000);
+  } catch (e) {
+    errEl.textContent = 'Error de conexión.';
+  }
+}
+
+function startClock() {
+  const tick = () => {
+    document.getElementById('clock').textContent = new Date().toLocaleString('es-ES', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      day: '2-digit', month: '2-digit', year: 'numeric'
+    });
+  };
+  tick();
+  setInterval(tick, 1000);
+}
+
+async function loadDashboard() {
+  try {
+    const resp = await fetch('/api/get-dashboard-data', { headers: { 'x-admin-code': adminCode } });
+    if (!resp.ok) throw new Error('No autorizado o error de servidor');
+    const data = await resp.json();
+    renderStatus(data.systemStatus);
+    renderStripe(data.stripe, data.stripeError, data.systemStatus);
+  } catch (e) {
+    document.getElementById('alertBox').className = 'alert-bad';
+    document.getElementById('alertBox').textContent = '1 Crítica: ' + e.message;
+  }
+}
+
+function renderStatus(status) {
+  const rows = [
+    ['API Claude (Anthropic)', status.anthropicConfigured],
+    ['Stripe', status.stripeConfigured],
+    ['Código Admin', status.adminConfigured]
+  ];
+  document.getElementById('statusRows').innerHTML = rows.map(([label, ok]) => `
+    <div class="status-row"><span class="dot ${ok ? 'ok' : 'bad'}"></span>${label}: ${ok ? 'Configurado' : 'Falta variable de entorno'}</div>
+  `).join('');
+
+  const allOk = rows.every(([, ok]) => ok);
+  const alertBox = document.getElementById('alertBox');
+  if (allOk) {
+    alertBox.className = 'alert-ok';
+    alertBox.textContent = '0 Críticas';
+  } else {
+    alertBox.className = 'alert-bad';
+    alertBox.textContent = (rows.filter(([, ok]) => !ok).length) + ' Crítica(s): variables de entorno faltantes';
+  }
+}
+
+function renderStripe(stripe, stripeError, status) {
+  if (!status.stripeConfigured) {
+    document.getElementById('balanceAvailable').textContent = 'N/D';
+    document.getElementById('balancePending').textContent = 'STRIPE_SECRET_KEY no configurada';
+    document.getElementById('chargeList').innerHTML = '<div class="empty-msg">Stripe no configurado.</div>';
+    return;
+  }
+  if (stripeError) {
+    document.getElementById('balanceAvailable').textContent = 'Error';
+    document.getElementById('balancePending').textContent = stripeError;
+    document.getElementById('chargeList').innerHTML = `<div class="empty-msg">${stripeError}</div>`;
+    return;
+  }
+
+  const fmt = (amount, currency) => (amount / 100).toLocaleString('es-ES', { style: 'currency', currency: currency.toUpperCase() });
+
+  const availTotal = stripe.available.reduce((s, b) => s + b.amount, 0);
+  const availCur = stripe.available[0]?.currency || 'eur';
+  const pendTotal = stripe.pending.reduce((s, b) => s + b.amount, 0);
+  const pendCur = stripe.pending[0]?.currency || 'eur';
+
+  document.getElementById('balanceAvailable').textContent = fmt(availTotal, availCur);
+  document.getElementById('balancePending').textContent = `pendiente: ${fmt(pendTotal, pendCur)}`;
+
+  document.getElementById('chargesTotalLabel').textContent =
+    stripe.recentCharges.length ? `(suma cobrados: ${fmt(stripe.recentChargesTotal, stripe.recentCharges[0].currency)})` : '';
+
+  if (!stripe.recentCharges.length) {
+    document.getElementById('chargeList').innerHTML = '<div class="empty-msg">Sin cargos todavía.</div>';
+    return;
+  }
+
+  document.getElementById('chargeList').innerHTML = stripe.recentCharges.map(c => `
+    <div class="charge-row">
+      <span>${new Date(c.created * 1000).toLocaleString('es-ES')}${c.email ? ' · ' + c.email : ''}</span>
+      <span class="charge-amount">${fmt(c.amount, c.currency)}</span>
+      <span class="charge-status ${c.status}">${c.status}</span>
+    </div>
+  `).join('');
+}
+</script>
+</body>
+</html>
