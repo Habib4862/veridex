@@ -100,7 +100,8 @@ router.post('/test', async (req, res) => {
     if (service === 'ga4') {
       let creds;
       try { creds = JSON.parse(key); } catch { return res.json({ ok: false, error: 'El JSON de la cuenta de servicio no es válido' }); }
-      const { client_email: clientEmail, private_key: privateKey, property_id: propertyId } = creds;
+      const { client_email: clientEmail, private_key: privateKey } = creds;
+      const propertyId = String(creds.property_id || '').trim().replace(/^properties\//, '');
       if (!clientEmail || !privateKey || !propertyId) {
         return res.json({ ok: false, error: 'Falta client_email, private_key o property_id en el JSON' });
       }
@@ -110,11 +111,16 @@ router.post('/test', async (req, res) => {
       } catch (e) {
         return res.json({ ok: false, error: e.message });
       }
-      const r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ dateRanges: [{ startDate: 'today', endDate: 'today' }], metrics: [{ name: 'activeUsers' }] })
-      });
+      let r;
+      try {
+        r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ dateRanges: [{ startDate: 'today', endDate: 'today' }], metrics: [{ name: 'activeUsers' }] })
+        });
+      } catch (e) {
+        return res.json({ ok: false, error: `No se pudo contactar la API de Google Analytics: ${e.message}` });
+      }
       if (r.status === 403) return res.json({ ok: false, error: 'La cuenta de servicio no tiene acceso a esta propiedad (añádela como Lector en GA4 → Administrar → Acceso a la propiedad)' });
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));
