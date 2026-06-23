@@ -53,7 +53,17 @@ class ClaudeService {
    * @returns {Promise<string>} HTML de la demo
    */
   async generateAppCode(client) {
-    const rawPrompt = `Crea una demo HTML breve para ${client.name}, sector ${client.sector}, necesidad: ${client.need || 'general'}.`;
+    const rawPrompt = `Eres un diseñador y desarrollador web senior. Crea una demo HTML
+      de la máxima calidad posible para ${client.name}, una empresa del sector
+      ${client.sector} con esta necesidad: ${client.need || 'una solución digital general'}.
+      Requisitos: una sola página HTML autocontenida con CSS embebido en <style> (sin
+      dependencias externas), diseño moderno y responsive, tipografía y espaciado
+      cuidados, y contenido específico y realista para ese sector y necesidad (nada
+      de texto genérico tipo "Lorem ipsum"). Incluye cabecera con el nombre de la
+      empresa, una propuesta de valor clara y al menos 2-3 secciones relevantes
+      (servicios, beneficios, llamada a la acción). Esta demo es lo primero que verá
+      el cliente potencial, así que debe causar la mejor impresión profesional posible.
+      Devuelve únicamente el HTML, sin explicaciones.`;
     const prompt = this.compressPrompt(rawPrompt);
     const cached = this._cacheGet(prompt);
     if (cached) return cached;
