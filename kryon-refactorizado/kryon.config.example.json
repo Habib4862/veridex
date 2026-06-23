@@ -1,0 +1,17 @@
+{
+  "backendUrl": "https://veridex-three-bice.vercel.app",
+  "masterPassword": "",
+  "supabaseUrl": "",
+  "connections": {
+    "anthropic": "",
+    "stripe": "",
+    "meta": "",
+    "google_ads": "",
+    "tiktok": "",
+    "linkedin": "",
+    "x": "",
+    "ga4": "",
+    "supabase": "",
+    "resend": ""
+  }
+}

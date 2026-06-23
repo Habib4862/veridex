@@ -107,6 +107,47 @@ modo:
    integraciones server-to-server o para servir el panel sin exponer la
    anon key.
 
+### Opción C — App de escritorio (Electron)
+
+KRYON también puede correr como app nativa de PC (Windows/Mac/Linux), con
+icono propio y ventana sin barra de navegador. Es el mismo frontend de
+siempre, envuelto en Electron — sigue hablando con el backend configurado
+(por defecto, el desplegado en Vercel).
+
+1. Instala las dependencias (incluye Electron):
+
+   ```bash
+   npm install
+   ```
+
+2. Copia el archivo de configuración de ejemplo:
+
+   ```bash
+   cp kryon.config.example.json kryon.config.json
+   ```
+
+3. Lanza la app:
+
+   ```bash
+   npm run desktop
+   ```
+
+4. Para generar un instalador distribuible:
+
+   ```bash
+   npm run desktop:build
+   ```
+
+**Configuración automática sin perder datos**: `kryon.config.json` (que
+nunca se sube a git) puede traer `backendUrl`, `masterPassword`,
+`supabaseUrl` y las claves de cada integración bajo `connections` (ver
+`kryon.config.example.json` para las claves válidas, los mismos ids de
+`CONNECTIONS_REGISTRY` en `js/connections.js`). Al abrir la app, solo se
+escriben en el almacenamiento local los campos que el archivo trae con
+valor — los demás campos (clientes, proyectos, historial, otras claves ya
+guardadas) se quedan exactamente como estaban. Para configurar algo nuevo
+basta con editar ese archivo y volver a abrir la app, sin tocar la UI.
+
 ### Tabla de endpoints del backend
 
 Todas las rutas bajo `/api/*` (excepto `/api/health`) requieren la cabecera
