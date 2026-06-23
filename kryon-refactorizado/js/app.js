@@ -725,6 +725,12 @@ const App = {
   },
 
   async sendDemo(id) {
+    const c = this.store.clients.find(x => x.id === id);
+    if (!c) return;
+    if (!this.autoMode) {
+      const confirmed = await this.confirmSend(c);
+      if (!confirmed) return;
+    }
     const result = this.pipeline.sendDemo(id);
     if (!result) return;
     const { client, app } = result;
@@ -733,6 +739,32 @@ const App = {
     if (this.cloud.connected) { this.cloud.insert('apps', app); this.cloud.update('clients', id, { stage: 'demo_enviada', demo_id: app.id }); }
     this.toast('Demo');
     this.renderShell(); this.render();
+  },
+
+  /** Muestra al usuario lo que está a punto de enviarse a un cliente (presupuesto, demo)
+   * antes de hacerlo, y espera su confirmación. @returns {Promise<boolean>} */
+  confirmSend(c) {
+    return new Promise((resolve) => {
+      const modal = document.createElement('div');
+      modal.className = 'modal-overlay';
+      modal.innerHTML = `<div class="modal-card">
+        <h3>${Icons.svg('flask', 16)} Revisar antes de enviar</h3>
+        <p><strong>Cliente:</strong> ${c.name}<br>
+        <strong>Sector:</strong> ${c.sector}<br>
+        <strong>Necesidad:</strong> ${c.need || 'general'}<br>
+        <strong>Presupuesto:</strong> €${(c.budget || 0).toLocaleString()}</p>
+        <p>Se generará y enviará una demo a este cliente con estos datos.</p>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="pill-btn primary" id="confirmSendBtn">${Icons.svg('check', 12)} Enviar</button>
+          <button class="pill-btn" id="cancelSendBtn">Cancelar</button>
+        </div>
+      </div>`;
+      document.body.appendChild(modal);
+      const cleanup = (val) => { modal.remove(); resolve(val); };
+      modal.querySelector('#confirmSendBtn').onclick = () => cleanup(true);
+      modal.querySelector('#cancelSendBtn').onclick = () => cleanup(false);
+      modal.addEventListener('click', (e) => { if (e.target === modal) cleanup(false); });
+    });
   },
 
   async approveClient(id) {
