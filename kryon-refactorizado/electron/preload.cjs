@@ -8,7 +8,10 @@
 const fs = require('fs');
 const path = require('path');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'kryon.config.json');
+// main.cjs resuelve la ruta real (junto al .exe si está empaquetada, en la
+// raíz del proyecto si es `npm run desktop`) y la pasa como argumento.
+const arg = process.argv.find(a => a.startsWith('--kryon-config='));
+const CONFIG_PATH = arg ? arg.slice('--kryon-config='.length) : path.join(__dirname, '..', 'kryon.config.json');
 
 const FIELD_TO_STORAGE_KEY = {
   backendUrl: 'axiom_backend_url',
