@@ -20,7 +20,7 @@ router.post('/generate', async (req, res) => {
       headers: { 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-6',
-        max_tokens: 1024,
+        max_tokens: 4096,
         messages: [{ role: 'user', content: `${prompt}\nDevuelve únicamente HTML válido, sin explicaciones.` }]
       })
     });

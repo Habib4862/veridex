@@ -6,6 +6,16 @@
  * de los hooks recibidos en el constructor (inyección de dependencias),
  * para mantenerse testeable de forma aislada.
  */
+/** Precio base por tipo de necesidad y factor de complejidad por sector regulado
+ * (Legaltech y Salud requieren más cumplimiento/integraciones que un sitio genérico),
+ * para que el presupuesto refleje el trabajo real en vez de ser puramente aleatorio. */
+const NEED_PRICING = {
+  Web: { base: 1500, variance: 1000 },
+  Ventas: { base: 3500, variance: 1500 },
+  Expandir: { base: 6000, variance: 2500 }
+};
+const SECTOR_FACTOR = { Legaltech: 1.25, Salud: 1.2, Ecommerce: 1.0 };
+
 class PipelineManager {
   /**
    * @param {object} store referencia mutable { clients, opportunities, portfolio, apps }
@@ -16,13 +26,24 @@ class PipelineManager {
     this.hooks = hooks;
   }
 
+  /** Calcula un presupuesto justo: precio base de la necesidad, ajustado por la
+   * complejidad típica del sector, redondeado a múltiplos de 50. */
+  static estimateBudget(need, sector) {
+    const pricing = NEED_PRICING[need] || NEED_PRICING.Web;
+    const factor = SECTOR_FACTOR[sector] || 1.0;
+    const raw = (pricing.base + Math.random() * pricing.variance) * factor;
+    return Math.round(raw / 50) * 50;
+  }
+
   generateClient() {
+    const sector = ['Legaltech', 'Ecommerce', 'Salud'][Math.floor(Math.random() * 3)];
+    const need = ['Web', 'Ventas', 'Expandir'][Math.floor(Math.random() * 3)];
     return {
       id: 'c_' + Date.now() + Math.random(),
       name: ['María García', 'Carlos López', 'Ana Martínez'][Math.floor(Math.random() * 3)],
-      sector: ['Legaltech', 'Ecommerce', 'Salud'][Math.floor(Math.random() * 3)],
-      need: ['Web', 'Ventas', 'Expandir'][Math.floor(Math.random() * 3)],
-      budget: Math.floor(Math.random() * 10000) + 2000,
+      sector,
+      need,
+      budget: PipelineManager.estimateBudget(need, sector),
       stage: 'nuevo',
       project_id: this.store.activeProjectId
     };
