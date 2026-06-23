@@ -131,9 +131,8 @@ const App = {
   afterLoad() {
     this.agentsManager.load(this.store.activeProjectId);
     this.renderShell();
-    this.render();
+    this.render(true);
     this.startCycles();
-    this.observeReveal();
   },
 
   async loadFromCloud() {
@@ -217,7 +216,7 @@ const App = {
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('axiom_theme', next);
     this.renderShell();
-    this.render();
+    this.render(true);
   },
 
   /* --------------------------------- Render --------------------------------- */
@@ -266,13 +265,19 @@ const App = {
         document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         this.currentTab = tab.dataset.tab;
-        this.render();
+        this.render(true);
       };
       if (tab.dataset.tab === this.currentTab) { document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); }
     });
   },
 
-  render() {
+  /**
+   * @param {boolean} animate Si es true, las tarjetas hacen fade-in (solo al
+   * cambiar de pestaña/proyecto o cargar por primera vez). Los refrescos de
+   * fondo (ciclos automáticos, acciones del pipeline) usan false para que el
+   * contenido no parpadee (desaparezca y reaparezca) mientras el usuario mira.
+   */
+  render(animate = false) {
     const c = document.getElementById('mainContent');
     if (!c) return;
     switch (this.currentTab) {
@@ -291,7 +296,7 @@ const App = {
       case 'health': this.renderHealth(c); break;
       case 'logs': this.renderLogs(c); break;
     }
-    this.observeReveal();
+    if (animate) this.observeReveal();
   },
 
   renderDashboard(c) {
@@ -597,7 +602,7 @@ const App = {
     (this.refreshFromCloud ? this.refreshFromCloud() : Promise.resolve(this.loadLocal())).then(() => {
       this.agentsManager.load(this.store.activeProjectId);
       this.renderShell();
-      this.render();
+      this.render(true);
     });
   },
 
@@ -610,7 +615,7 @@ const App = {
     if (this.cloud.connected) this.cloud.insert('projects', { id, name, created_at: new Date().toISOString() });
     this.saveLocal();
     this.renderShell();
-    this.render();
+    this.render(true);
   },
 
   showConfigModal() {
