@@ -3,7 +3,7 @@
  * Web Push. No intercepta llamadas a Supabase/Anthropic/el backend, solo
  * los assets estáticos de la PWA.
  */
-const CACHE_NAME = 'kryon-cache-v1';
+const CACHE_NAME = 'kryon-cache-v2';
 const ASSETS = [
   './index.html',
   './css/style.css',
