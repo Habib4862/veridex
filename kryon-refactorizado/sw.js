@@ -3,7 +3,7 @@
  * Web Push. No intercepta llamadas a Supabase/Anthropic/el backend, solo
  * los assets estáticos de la PWA.
  */
-const CACHE_NAME = 'kryon-cache-v2';
+const CACHE_NAME = 'kryon-cache-v3';
 const ASSETS = [
   './index.html',
   './css/style.css',
@@ -19,7 +19,13 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // fetch con cache:'reload' para no rellenar la caché nueva con respuestas
+  // viejas que sigan en la caché HTTP del navegador.
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => Promise.all(ASSETS.map((url) => fetch(url, { cache: 'reload' }).then((res) => cache.put(url, res)))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', (event) => {
