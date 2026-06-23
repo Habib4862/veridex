@@ -85,6 +85,7 @@ const App = {
   async init() {
     this.applyStoredTheme();
     BrainEngine.init();
+    this.backendUrl = (localStorage.getItem('axiom_backend_url') || '').replace(/\/$/, '');
     this.cloud = CloudDB;
     this.connections = new ConnectionsManager(this.cloud);
     this.agentsManager = new AgentsManager();
@@ -675,16 +676,30 @@ const App = {
   showConfigModal() {
     const url = localStorage.getItem('axiom_supabase_url') || '';
     const key = localStorage.getItem('axiom_supabase_key') || '';
+    const backendUrl = localStorage.getItem('axiom_backend_url') || '';
     const content = `<h3>${Icons.svg('settings', 16)} Configuración Cloud</h3>
       <p>1. Crea cuenta en supabase.com<br>2. Ve a Settings &gt; API<br>3. Copia URL y anon key</p>
       <input id="cfg_url" value="${url}" placeholder="https://...supabase.co">
       <input id="cfg_key" value="${key}" placeholder="eyJhbGciOi...">
-      <button class="pill-btn primary" onclick="CloudDB.setCredentials(document.getElementById('cfg_url').value,document.getElementById('cfg_key').value);alert('Guardado. Recarga la página.');location.reload();">${Icons.svg('check', 12)} Guardar y reconectar</button>`;
+      <button class="pill-btn primary" onclick="CloudDB.setCredentials(document.getElementById('cfg_url').value,document.getElementById('cfg_key').value);alert('Guardado. Recarga la página.');location.reload();">${Icons.svg('check', 12)} Guardar y reconectar</button>
+      <hr style="margin:14px 0;border-color:var(--border);">
+      <h3>${Icons.svg('settings', 16)} Backend (opcional)</h3>
+      <p>URL de tu backend desplegado (Vercel, etc.). Activa la generación real de demos con Claude, la verificación en vivo de Resend/Anthropic y las notificaciones push.</p>
+      <input id="cfg_backend_url" value="${backendUrl}" placeholder="https://tu-backend.vercel.app">
+      <button class="pill-btn primary" onclick="App.saveBackendUrl()">${Icons.svg('check', 12)} Guardar backend</button>`;
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = `<div class="modal-card">${content}<button class="pill-btn" onclick="this.closest('.modal-overlay').remove()" style="margin-top:8px;">Cerrar</button></div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  },
+
+  saveBackendUrl() {
+    const input = document.getElementById('cfg_backend_url');
+    const val = (input.value || '').trim().replace(/\/$/, '');
+    localStorage.setItem('axiom_backend_url', val);
+    alert('Guardado. Recarga la página.');
+    location.reload();
   },
 
   async contactClient(id) {
