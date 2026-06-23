@@ -189,5 +189,53 @@ canvas#brainCanvas { position: fixed; inset: 0; z-index: 1; }
 .price-card .price-name { font-size: 0.68rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
 .price-card .price-value { font-size: 1.3rem; font-weight: 800; color: var(--gold); text-shadow: 0 0 16px rgba(232, 201, 122, 0.3); }
 
+/* Avatares genéricos (clientes / agentes) */
+.avatar-circle { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; background: linear-gradient(135deg, rgba(34, 211, 238, 0.18), rgba(192, 132, 252, 0.12)); border: 1px solid rgba(77, 240, 255, 0.3); font-size: 0.62rem; font-weight: 700; color: var(--ice); }
+
+/* Mini-track de progreso del pipeline (5 etapas) */
+.stage-track { display: flex; gap: 3px; align-items: center; }
+.stage-track .seg { width: 14px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.08); transition: var(--transition); }
+.stage-track .seg.done { background: var(--synapse-glow); box-shadow: 0 0 6px var(--synapse-glow); }
+
+/* Live indicator (modo automático) */
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); display: inline-block; animation: pulseDot 1.4s ease-in-out infinite; }
+@keyframes pulseDot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* Conexiones — categorías, badge e inputs de credenciales */
+.conn-category-title { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 16px 2px 8px; }
+.conn-category:first-child .conn-category-title { margin-top: 2px; }
+.conn-badge { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.62rem; font-weight: 800; border: 1px solid rgba(255,255,255,0.18); flex-shrink: 0; }
+.conn-status { font-size: 0.6rem; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.conn-input-row { display: flex; gap: 6px; }
+.conn-input-row input { flex: 1; min-width: 0; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; color: var(--text); font-family: var(--font-mono); font-size: 0.68rem; transition: var(--transition); }
+.conn-input-row input:focus { outline: none; border-color: var(--synapse-glow); }
+.conn-input-row .pill-btn { padding: 7px 10px; }
+
+/* Filtros de logs */
+.filter-chips { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
+.filter-chip { padding: 5px 13px; border-radius: 20px; font-size: 0.65rem; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); transition: var(--transition); font-family: var(--font-title); }
+.filter-chip:hover { color: var(--text); border-color: rgba(77, 240, 255, 0.35); }
+.filter-chip.active { background: rgba(77, 240, 255, 0.12); border-color: rgba(77, 240, 255, 0.5); color: var(--synapse-glow); }
+
+/* Navegador simulado para previews de demos */
+.browser-frame { border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); background: #0a0e1a; }
+.browser-frame-bar { display: flex; align-items: center; gap: 6px; padding: 7px 10px; background: rgba(255,255,255,0.03); border-bottom: 1px solid var(--border); }
+.browser-frame-bar .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.browser-frame-bar .dot.red { background: var(--red); } .browser-frame-bar .dot.yellow { background: var(--orange); } .browser-frame-bar .dot.green { background: var(--green); }
+.browser-frame-bar .url { flex: 1; background: rgba(0,0,0,0.3); border-radius: 8px; padding: 3px 10px; font-size: 0.6rem; color: var(--muted); font-family: var(--font-mono); text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-frame iframe { display: block; width: 100%; border: none; background: #fff; }
+
+/* Tabla de comparación de proyectos */
+.compare-table { width: 100%; margin-top: 10px; border-collapse: collapse; font-size: 0.68rem; }
+.compare-table th { text-align: left; color: var(--muted); text-transform: uppercase; font-size: 0.58rem; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.compare-table td { padding: 7px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--dim); }
+.compare-table tr.active-row td { color: var(--synapse-glow); }
+.compare-table tr:hover td { background: rgba(77, 240, 255, 0.05); }
+
+/* Salud — etiquetas de estado e icono por categoría */
+.health-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.health-row svg { color: var(--muted); flex-shrink: 0; }
+.health-status { font-size: 0.6rem; font-weight: 700; }
+
 @media (max-width: 1000px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } .grid-3 { grid-template-columns: repeat(2, 1fr); } .metric-value { font-size: 1.8rem; } }
-@media (max-width: 600px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; } .metric-value { font-size: 1.6rem; } .nav-tabs { overflow-x: auto; flex-wrap: nowrap; } .toast { left: 16px; right: 16px; max-width: none; } }
+@media (max-width: 600px) { .grid-4, .grid-3, .grid-2 { grid-template-columns: 1fr; } .header { flex-direction: column; align-items: flex-start; } .metric-value { font-size: 1.6rem; } .nav-tabs { overflow-x: auto; flex-wrap: nowrap; } .toast { left: 16px; right: 16px; max-width: none; } .conn-input-row { flex-wrap: wrap; } }
