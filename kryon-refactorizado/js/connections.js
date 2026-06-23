@@ -8,16 +8,16 @@
  * listas para que cada integración real se conecte sin tocar la UI.
  */
 const CONNECTIONS_REGISTRY = [
-  { id: 'stripe', name: 'Stripe', color: '#635bff', storageKey: 'axiom_key_stripe', live: false },
-  { id: 'meta', name: 'Meta Ads', color: '#0866ff', storageKey: 'axiom_key_meta', live: false },
-  { id: 'google_ads', name: 'Google Ads', color: '#fbbc05', storageKey: 'axiom_key_google_ads', live: false },
-  { id: 'tiktok', name: 'TikTok', color: '#ff0050', storageKey: 'axiom_key_tiktok', live: false },
-  { id: 'linkedin', name: 'LinkedIn', color: '#0a66c2', storageKey: 'axiom_key_linkedin', live: false },
-  { id: 'x', name: 'X (Twitter)', color: '#e2e4ed', storageKey: 'axiom_key_x', live: false },
-  { id: 'ga4', name: 'Google Analytics 4', color: '#f9ab00', storageKey: 'axiom_key_ga4', live: false },
-  { id: 'supabase', name: 'Supabase', color: '#3ecf8e', storageKey: 'axiom_supabase_key', live: true },
-  { id: 'resend', name: 'Resend', color: '#000000', storageKey: 'axiom_key_resend', live: true },
-  { id: 'anthropic', name: 'Anthropic', color: '#d97757', storageKey: 'axiom_key_anthropic', live: true }
+  { id: 'stripe', name: 'Stripe', color: '#635bff', storageKey: 'axiom_key_stripe', live: false, keyPattern: /^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/, liveTest: false },
+  { id: 'meta', name: 'Meta Ads', color: '#0866ff', storageKey: 'axiom_key_meta', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'google_ads', name: 'Google Ads', color: '#fbbc05', storageKey: 'axiom_key_google_ads', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'tiktok', name: 'TikTok', color: '#ff0050', storageKey: 'axiom_key_tiktok', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'linkedin', name: 'LinkedIn', color: '#0a66c2', storageKey: 'axiom_key_linkedin', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'x', name: 'X (Twitter)', color: '#e2e4ed', storageKey: 'axiom_key_x', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'ga4', name: 'Google Analytics 4', color: '#f9ab00', storageKey: 'axiom_key_ga4', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'supabase', name: 'Supabase', color: '#3ecf8e', storageKey: 'axiom_supabase_key', live: true, keyPattern: /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/, liveTest: true },
+  { id: 'resend', name: 'Resend', color: '#000000', storageKey: 'axiom_key_resend', live: true, keyPattern: /^re_[A-Za-z0-9_]+$/, liveTest: true },
+  { id: 'anthropic', name: 'Anthropic', color: '#d97757', storageKey: 'axiom_key_anthropic', live: true, keyPattern: /^sk-ant-[A-Za-z0-9_-]+$/, liveTest: true }
 ];
 
 class ConnectionsManager {
@@ -51,6 +51,25 @@ class ConnectionsManager {
 
   isCloudConnected() {
     return !!this.cloud?.connected;
+  }
+
+  /** @returns {boolean} true si `value` cumple el formato esperado de la clave (chequeo offline, sin red) */
+  validateFormat(id, value) {
+    const c = CONNECTIONS_REGISTRY.find(x => x.id === id);
+    if (!c || !value) return false;
+    return c.keyPattern.test(value.trim());
+  }
+
+  /** @returns {boolean} true si esta integración tiene verificación en vivo real (vs. solo chequeo de formato) */
+  supportsLiveTest(id) {
+    const c = CONNECTIONS_REGISTRY.find(x => x.id === id);
+    return !!c?.liveTest;
+  }
+
+  getKey(id) {
+    const c = CONNECTIONS_REGISTRY.find(x => x.id === id);
+    if (!c || typeof localStorage === 'undefined') return '';
+    return localStorage.getItem(c.storageKey) || '';
   }
 }
 

@@ -210,6 +210,12 @@ canvas#brainCanvas { position: fixed; inset: 0; z-index: 1; }
 .conn-input-row input { flex: 1; min-width: 0; background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; color: var(--text); font-family: var(--font-mono); font-size: 0.68rem; transition: var(--transition); }
 .conn-input-row input:focus { outline: none; border-color: var(--synapse-glow); }
 .conn-input-row .pill-btn { padding: 7px 10px; }
+.conn-test-result { display: flex; align-items: center; gap: 6px; font-size: 0.62rem; margin-top: 8px; min-height: 14px; }
+.conn-test-result:empty { margin-top: 0; }
+.conn-test-result.testing { color: var(--muted); }
+.conn-test-result.ok { color: var(--green); }
+.conn-test-result.warn { color: var(--orange); }
+.conn-test-result.bad { color: var(--red); }
 
 /* Filtros de logs */
 .filter-chips { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }

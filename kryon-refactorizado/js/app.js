@@ -60,7 +60,8 @@ const Icons = {
     lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
     scale: '<path d="M16 3h5v5M8 3H3v5M3 16v5h5M16 21h5v-5"/>',
     megaphone: '<path d="M3 11v3a1 1 0 0 0 1 1h2l3 5h2v-7M21 4 8 9H3v6h5l13 5z"/>',
-    x: '<path d="M18 6 6 18"/><path d="M6 6l12 12"/>'
+    x: '<path d="M18 6 6 18"/><path d="M6 6l12 12"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'
   },
   svg(name, size = 14) {
     const p = this.paths[name] || this.paths.sparkles;
@@ -397,6 +398,8 @@ const App = {
                 <button class="pill-btn primary" onclick="App.saveConnectionKey('${conn.id}')">${Icons.svg('check', 12)}</button>
                 ${conn.configured ? `<button class="pill-btn" onclick="App.clearConnectionKey('${conn.id}')">${Icons.svg('x', 12)}</button>` : ''}
               </div>
+              ${conn.configured ? `<button class="pill-btn" style="margin-top:6px;width:100%;justify-content:center;" onclick="App.testConnection('${conn.id}')">${Icons.svg('activity', 12)} Probar conexión</button>` : ''}
+              <div class="conn-test-result" id="conn_result_${conn.id}"></div>
             </div>`).join('')}</div></div>`;
       }).join('')}
       </div>`;
@@ -405,19 +408,70 @@ const App = {
   initials(name) { return initials(name); },
   contrastColor(hex) { return contrastColor(hex); },
 
-  saveConnectionKey(id) {
+  async saveConnectionKey(id) {
     const input = document.getElementById(`conn_input_${id}`);
     const value = input?.value.trim();
     if (!value) return;
     this.connections.setKey(id, value);
     this.toast('Clave guardada');
     this.render();
+    await this.testConnection(id);
   },
 
   clearConnectionKey(id) {
     this.connections.setKey(id, '');
     this.toast('Clave eliminada');
     this.render();
+  },
+
+  setConnTestResult(id, level, msg) {
+    const el = document.getElementById(`conn_result_${id}`);
+    if (!el) return;
+    const icon = { testing: 'search', ok: 'check', warn: 'alert', bad: 'x' }[level];
+    el.className = `conn-test-result ${level}`;
+    el.innerHTML = `${Icons.svg(icon, 12)} ${msg}`;
+  },
+
+  /** Comprueba si la clave guardada de `id` realmente funciona. Primero valida el formato
+   * sin red; si la integración tiene verificación en vivo real, la ejecuta y muestra el
+   * resultado exacto (conectada/funcionando, clave inválida, o sin backend disponible). */
+  async testConnection(id) {
+    const key = this.connections.getKey(id);
+    if (!key) return;
+    this.setConnTestResult(id, 'testing', 'Comprobando...');
+
+    if (!this.connections.validateFormat(id, key)) {
+      return this.setConnTestResult(id, 'bad', 'Formato de clave no reconocido');
+    }
+
+    if (!this.connections.supportsLiveTest(id)) {
+      return this.setConnTestResult(id, 'warn', 'Formato válido · sin verificación en vivo disponible aún');
+    }
+
+    try {
+      if (id === 'supabase') {
+        const url = localStorage.getItem('axiom_supabase_url') || '';
+        if (!url) return this.setConnTestResult(id, 'warn', 'Falta la URL del proyecto (Configuración Cloud)');
+        const r = await fetch(`${url}/rest/v1/projects?select=id&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+        if (r.ok || r.status === 406) return this.setConnTestResult(id, 'ok', 'Conectada y funcionando');
+        if (r.status === 401 || r.status === 403) return this.setConnTestResult(id, 'bad', 'Clave inválida o sin permisos');
+        return this.setConnTestResult(id, 'bad', `Supabase respondió ${r.status}`);
+      }
+
+      if (!this.backendUrl) {
+        return this.setConnTestResult(id, 'warn', 'Configura la URL del backend para verificar esta clave en vivo');
+      }
+      const r = await fetch(`${this.backendUrl}/api/connections/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+        body: JSON.stringify({ service: id, key })
+      });
+      const data = await r.json();
+      if (data.ok) return this.setConnTestResult(id, 'ok', `Conectada y funcionando — ${data.detail}`);
+      return this.setConnTestResult(id, 'bad', data.error || 'Clave inválida');
+    } catch {
+      return this.setConnTestResult(id, 'bad', 'No se pudo contactar el servicio externo');
+    }
   },
 
   renderEditor(c) {
@@ -578,14 +632,14 @@ const App = {
     const opp = this.pipeline.autoScan();
     if (this.cloud.connected) await this.cloud.insert('opportunities', opp);
     this.saveLocal();
-    this.render();
+    if (this.currentTab === 'dashboard') this.render();
   },
 
   async autoFindClients() {
     const client = this.pipeline.autoFindClients();
     if (this.cloud.connected) await this.cloud.insert('clients', client);
     this.saveLocal();
-    this.render();
+    if (['dashboard', 'pipeline', 'clients'].includes(this.currentTab)) this.render();
   },
 
   autoBackup() {

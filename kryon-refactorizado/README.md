@@ -125,6 +125,7 @@ Todas las rutas bajo `/api/*` (excepto `/api/health`) requieren la cabecera
 | GET | `/api/push/vapid-public-key` | Clave pública VAPID |
 | POST | `/api/push/subscribe` | Registra una suscripción push |
 | POST | `/api/push/send` | Envía una notificación push |
+| POST | `/api/connections/test` | Verifica en vivo una clave de Resend o Anthropic |
 
 ## Despliegue en Vercel
 
