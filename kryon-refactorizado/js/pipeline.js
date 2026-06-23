@@ -15,6 +15,9 @@ const NEED_PRICING = {
   Expandir: { base: 6000, variance: 2500 }
 };
 const SECTOR_FACTOR = { Legaltech: 1.25, Salud: 1.2, Ecommerce: 1.0 };
+/** Etiqueta del entregable según la necesidad, para que la lista de apps no
+ * llame "Demo" a algo que en realidad es un sitio web o una automatización. */
+const NEED_LABELS = { Web: 'Sitio web', Ventas: 'Página de ventas', Expandir: 'Automatización' };
 
 class PipelineManager {
   /**
@@ -75,7 +78,8 @@ class PipelineManager {
   sendDemo(id, code) {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'contactado') return null;
-    const app = { id: 'a_' + Date.now(), name: `Demo ${c.sector}`, code: code || `<h1>Demo para ${c.name}</h1>`, status: 'demo', clientId: c.id, project_id: this.store.activeProjectId };
+    const label = NEED_LABELS[c.need] || 'Demo';
+    const app = { id: 'a_' + Date.now(), name: `${label} ${c.sector}`, code: code || `<h1>Demo para ${c.name}</h1>`, status: 'demo', clientId: c.id, project_id: this.store.activeProjectId };
     this.store.apps.unshift(app);
     c.stage = 'demo_enviada';
     c.demoId = app.id;

@@ -1,10 +1,20 @@
 /**
- * claude.js — Creador de apps/demos. Comprime prompts, cachea resultados
+ * claude.js — Creador de entregables para clientes (sitio web, landing de
+ * ventas, demo de automatización...). El tipo de entregable se adapta a la
+ * necesidad del cliente (ver NEED_BRIEFS). Comprime prompts, cachea resultados
  * repetidos y delega la llamada real a Claude en el backend (server/),
  * que es quien guarda la API key. Si no hay backend disponible (modo
  * "abrir index.html directamente"), recurre a una plantilla local idéntica
  * a la del archivo original — el comportamiento previo nunca se rompe.
  */
+/** Qué tipo de entregable conviene crear según la necesidad del cliente, para que
+ * el prompt no esté limitado a "una demo" sino al mejor formato para cada caso. */
+const NEED_BRIEFS = {
+  Web: 'una página web completa y profesional para la empresa, con varias secciones que actúen como páginas reales de un sitio (inicio, servicios, sobre nosotros, contacto) navegables mediante anclas internas',
+  Ventas: 'una página de ventas/landing orientada a conversión, con un embudo claro: propuesta de valor, prueba social, oferta concreta y llamadas a la acción potentes para vender el servicio o producto principal del cliente',
+  Expandir: 'una demostración de un sistema o automatización (por ejemplo un flujo de trabajo visual, un panel de seguimiento de procesos o una vista de un sistema interno) que muestre cómo el cliente puede automatizar o escalar su negocio'
+};
+
 class ClaudeService {
   /**
    * @param {string} backendUrl base del backend, ej. 'http://localhost:3000'
@@ -53,16 +63,17 @@ class ClaudeService {
    * @returns {Promise<string>} HTML de la demo
    */
   async generateAppCode(client) {
-    const rawPrompt = `Eres un diseñador y desarrollador web senior. Crea una demo HTML
-      de la máxima calidad posible para ${client.name}, una empresa del sector
-      ${client.sector} con esta necesidad: ${client.need || 'una solución digital general'}.
+    const brief = NEED_BRIEFS[client.need] || 'una demo de la máxima calidad posible para presentar el negocio del cliente';
+    const rawPrompt = `Eres un diseñador y desarrollador senior especializado en crear entregables
+      digitales de la máxima calidad posible. Crea ${brief} para ${client.name}, una empresa del
+      sector ${client.sector}.
       Requisitos: una sola página HTML autocontenida con CSS embebido en <style> (sin
       dependencias externas), diseño moderno y responsive, tipografía y espaciado
       cuidados, y contenido específico y realista para ese sector y necesidad (nada
       de texto genérico tipo "Lorem ipsum"). Incluye cabecera con el nombre de la
-      empresa, una propuesta de valor clara y al menos 2-3 secciones relevantes
-      (servicios, beneficios, llamada a la acción). Esta demo es lo primero que verá
-      el cliente potencial, así que debe causar la mejor impresión profesional posible.
+      empresa y una propuesta de valor clara. Este entregable es lo primero que verá
+      el cliente potencial, así que debe causar la mejor impresión profesional posible
+      y ajustarse exactamente al tipo de necesidad descrito arriba.
       Devuelve únicamente el HTML, sin explicaciones.`;
     const prompt = this.compressPrompt(rawPrompt);
     const cached = this._cacheGet(prompt);
