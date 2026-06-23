@@ -42,6 +42,8 @@ describe('ConnectionsManager', () => {
     expect(mgr.validateFormat('stripe', 'sk_test_abcdefghij')).toBe(true);
     expect(mgr.validateFormat('stripe', 'short')).toBe(false);
     expect(mgr.validateFormat('anthropic', '')).toBe(false);
+    expect(mgr.validateFormat('ga4', '{"client_email":"a@b.iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\\n...","property_id":"123456789"}')).toBe(true);
+    expect(mgr.validateFormat('ga4', '{"property_id":"123"}')).toBe(false);
   });
 
   it('reports which integrations support a real live test vs. format-only', () => {
@@ -55,7 +57,7 @@ describe('ConnectionsManager', () => {
     expect(mgr.supportsLiveTest('linkedin')).toBe(true);
     expect(mgr.supportsLiveTest('x')).toBe(true);
     expect(mgr.supportsLiveTest('google_ads')).toBe(false);
-    expect(mgr.supportsLiveTest('ga4')).toBe(false);
+    expect(mgr.supportsLiveTest('ga4')).toBe(true);
   });
 
   it('returns the stored key value via getKey', () => {
