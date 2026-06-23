@@ -267,7 +267,11 @@ const App = {
       case 'creator': this.renderCreator(c); break;
       case 'agents': this.renderAgents(c); break;
       case 'connections': this.renderConnections(c); break;
-      case 'pricing': c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('euro')} Precios</div><p style="color:var(--dim);">VERIDEX: 25€ | Landing: 500€ | App: 1000€ | Dashboard: 2500€ | Consultoría: 2000€ | Licencia KRYON: 149€/mes</p></div>`; break;
+      case 'pricing': c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('euro')} Precios</div>
+        <div class="grid grid-3">${[
+          ['VERIDEX', '25€'], ['Landing', '500€'], ['App', '1000€'],
+          ['Dashboard', '2500€'], ['Consultoría', '2000€'], ['Licencia KRYON', '149€/mes']
+        ].map(([name, price]) => `<div class="price-card"><div class="price-name">${name}</div><div class="price-value">${price}</div></div>`).join('')}</div></div>`; break;
       case 'editor': this.renderEditor(c); break;
       case 'health': this.renderHealth(c); break;
       case 'logs': this.renderLogs(c); break;
@@ -278,10 +282,10 @@ const App = {
   renderDashboard(c) {
     c.innerHTML = `
       <div class="grid grid-4">
-        <div class="card"><div class="card-header">${Icons.svg('target')} Oport</div><div class="metric-value">${this.store.opportunities.length}</div></div>
-        <div class="card"><div class="card-header">${Icons.svg('target')} Clientes</div><div class="metric-value">${this.store.clients.length}</div></div>
-        <div class="card"><div class="card-header">${Icons.svg('wrench')} Apps</div><div class="metric-value">${this.store.apps.length}</div></div>
-        <div class="card"><div class="card-header">${Icons.svg('euro')} Cartera</div><div class="metric-value">€${(this.store.portfolio.total || 25000).toLocaleString()}</div></div>
+        <div class="card accent-cyan"><div class="card-header">${Icons.svg('target')} Oport</div><div class="metric-value">${this.store.opportunities.length}</div></div>
+        <div class="card accent-purple"><div class="card-header">${Icons.svg('target')} Clientes</div><div class="metric-value">${this.store.clients.length}</div></div>
+        <div class="card accent-green"><div class="card-header">${Icons.svg('wrench')} Apps</div><div class="metric-value">${this.store.apps.length}</div></div>
+        <div class="card accent-gold"><div class="card-header">${Icons.svg('euro')} Cartera</div><div class="metric-value">€${(this.store.portfolio.total || 25000).toLocaleString()}</div></div>
       </div>
       <div class="grid grid-2">
         <div class="card"><div class="card-header">${Icons.svg('dashboard')} Evolución <button class="pill-btn" style="font-size:0.6rem;" onclick="App.toggleCompare()">Comparar proyectos</button></div><div class="chart-container"><canvas id="mainChart"></canvas></div><div id="compareArea"></div></div>
@@ -300,7 +304,7 @@ const App = {
           ${cl.stage === 'contactado' ? `<button class="pill-btn primary" onclick="App.sendDemo('${cl.id}')">${Icons.svg('flask', 12)}</button>` : ''}
           ${cl.stage === 'demo_enviada' ? `<button class="pill-btn approve" onclick="App.approveClient('${cl.id}')">${Icons.svg('check', 12)}</button>` : ''}
           ${cl.stage === 'aprobado' ? `<button class="pill-btn gold" onclick="App.completeProduct('${cl.id}')">${Icons.svg('microscope', 12)}</button>` : ''}
-        </div>`).join('') || '<p style="color:var(--muted);">Sin clientes</p>'}
+        </div>`).join('') || `<div class="empty-state">${Icons.svg('target', 28)}<span>Sin clientes en el pipeline</span></div>`}
       </div></div>`;
   },
 
@@ -317,7 +321,7 @@ const App = {
   },
 
   clientListHtml(list) {
-    return list.map(cl => `<div class="node-item"><div class="node-dot" style="background:var(--orange);"></div><div><strong>${cl.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${cl.sector} · €${cl.budget}</div></div></div>`).join('') || '<p style="color:var(--muted);">Sin resultados</p>';
+    return list.map(cl => `<div class="node-item"><div class="node-dot" style="background:var(--orange);"></div><div><strong>${cl.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${cl.sector} · €${cl.budget}</div></div></div>`).join('') || `<div class="empty-state">${Icons.svg('search', 28)}<span>Sin resultados</span></div>`;
   },
 
   renderCreator(c) {
@@ -330,7 +334,8 @@ const App = {
 
   renderAgents(c) {
     c.innerHTML = `<div class="grid grid-3">${this.agentsManager.agents.map(a => `
-      <div class="card"><div class="card-header">${Icons.svg(a.icon, 13)} ${a.name} <span class="agent-level">Nv.${a.level}</span></div>
+      <div class="card">
+        <div class="agent-card-head"><div class="agent-avatar">${Icons.svg(a.icon, 17)}</div><div><div class="agent-name">${a.name}</div><span class="agent-level">Nv.${a.level}</span></div></div>
         <div style="font-size:0.55rem;color:var(--dim);">${a.xp} XP</div>
         <div class="xp-bar"><div class="xp-fill" style="width:${this.agentsManager.xpProgress(a)}%;"></div></div>
       </div>`).join('')}</div>`;
@@ -341,7 +346,7 @@ const App = {
     c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('cloud')} Conexiones (${list.filter(x => x.configured).length}/${list.length})</div>
       <div class="grid grid-3">${list.map(conn => `
         <div class="card"><div class="card-header" style="color:${conn.color};">${conn.name}</div>
-          <div style="font-size:0.6rem;color:${conn.configured ? 'var(--green)' : 'var(--muted)'};">${conn.configured ? 'Configurada' : 'Sin configurar'}${conn.live ? '' : ' · próximamente'}</div>
+          <div style="font-size:0.6rem;color:${conn.configured ? 'var(--green)' : 'var(--muted)'};display:flex;align-items:center;gap:6px;"><span class="connection-dot ${conn.configured ? 'on' : 'off'}"></span>${conn.configured ? 'Configurada' : 'Sin configurar'}${conn.live ? '' : ' · próximamente'}</div>
         </div>`).join('')}</div></div>`;
   },
 
@@ -368,7 +373,7 @@ const App = {
   },
 
   renderLogEntries(logs) {
-    return (logs || []).map(l => `<div class="log-entry"><span class="log-level log-level-${l.level || 'info'}">${(l.level || 'info').toUpperCase()}</span> [${new Date(l.time).toLocaleTimeString()}] ${l.msg}</div>`).join('') || '<p style="color:var(--muted);">Sin actividad</p>';
+    return (logs || []).map(l => `<div class="log-entry"><span class="log-level log-level-${l.level || 'info'}">${(l.level || 'info').toUpperCase()}</span> [${new Date(l.time).toLocaleTimeString()}] ${l.msg}</div>`).join('') || `<div class="empty-state">${Icons.svg('logs', 26)}<span>Sin actividad</span></div>`;
   },
 
   /** Activa el fade-in + slide-up de tarjetas visibles (IntersectionObserver). */
@@ -378,7 +383,7 @@ const App = {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); } });
     }, { threshold: 0.1 });
-    cards.forEach(card => { card.classList.add('reveal'); observer.observe(card); });
+    cards.forEach((card, i) => { card.classList.add('reveal'); card.style.transitionDelay = `${Math.min(i, 8) * 40}ms`; observer.observe(card); });
   },
 
   /* ------------------------------ Chart histórico ------------------------------ */
@@ -387,17 +392,27 @@ const App = {
     if (!ctx) return;
     if (this.chart) this.chart.destroy();
     const hist = this.store.history.length ? this.store.history : [{ t: Date.now(), opportunities: this.store.opportunities.length, clients: this.store.clients.length, apps: this.store.apps.length }];
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? 'rgba(11,18,32,0.08)' : 'rgba(255,255,255,0.06)';
+    const tickColor = isLight ? '#3c4357' : '#b6bacb';
     this.chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: hist.map(h => new Date(h.t).toLocaleTimeString()),
         datasets: [
-          { label: 'Oportunidades', data: hist.map(h => h.opportunities), borderColor: '#4df0ff', backgroundColor: 'rgba(77,240,255,0.08)', tension: 0.4, fill: true },
-          { label: 'Clientes', data: hist.map(h => h.clients), borderColor: '#e8c97a', backgroundColor: 'rgba(232,201,122,0.08)', tension: 0.4, fill: true },
-          { label: 'Apps', data: hist.map(h => h.apps), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.08)', tension: 0.4, fill: true }
+          { label: 'Oportunidades', data: hist.map(h => h.opportunities), borderColor: '#4df0ff', backgroundColor: 'rgba(77,240,255,0.08)', pointBackgroundColor: '#4df0ff', tension: 0.4, fill: true },
+          { label: 'Clientes', data: hist.map(h => h.clients), borderColor: '#e8c97a', backgroundColor: 'rgba(232,201,122,0.08)', pointBackgroundColor: '#e8c97a', tension: 0.4, fill: true },
+          { label: 'Apps', data: hist.map(h => h.apps), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.08)', pointBackgroundColor: '#34d399', tension: 0.4, fill: true }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false }
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: tickColor, font: { size: 11 } } } },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } },
+          y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } }
+        }
+      }
     });
   },
 
@@ -433,10 +448,10 @@ const App = {
 
   toast(msg) {
     const t = document.createElement('div');
-    t.style.cssText = 'position:fixed;top:16px;right:16px;background:rgba(8,14,30,0.95);border:1px solid #4df0ff;padding:8px 16px;border-radius:20px;z-index:200;font-size:0.7rem;color:#fff;';
-    t.textContent = msg;
+    t.className = 'toast';
+    t.innerHTML = `${Icons.svg('check', 14)}<span>${msg}</span>`;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2500);
+    setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 300); }, 2500);
   },
 
   async autoScan() {
@@ -487,13 +502,13 @@ const App = {
     const url = localStorage.getItem('axiom_supabase_url') || '';
     const key = localStorage.getItem('axiom_supabase_key') || '';
     const content = `<h3>${Icons.svg('settings', 16)} Configuración Cloud</h3>
-      <p style="font-size:0.6rem;color:var(--dim);">1. Crea cuenta en supabase.com<br>2. Ve a Settings > API<br>3. Copia URL y anon key</p>
-      <input id="cfg_url" value="${url}" placeholder="https://...supabase.co" style="width:100%;margin-top:8px;background:rgba(0,0,0,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;color:#fff;">
-      <input id="cfg_key" value="${key}" placeholder="eyJhbGciOi..." style="width:100%;margin-top:8px;background:rgba(0,0,0,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;color:#fff;">
-      <button class="pill-btn primary" onclick="CloudDB.setCredentials(document.getElementById('cfg_url').value,document.getElementById('cfg_key').value);alert('Guardado. Recarga la página.');location.reload();" style="margin-top:8px;">${Icons.svg('check', 12)} Guardar y reconectar</button>`;
+      <p>1. Crea cuenta en supabase.com<br>2. Ve a Settings &gt; API<br>3. Copia URL y anon key</p>
+      <input id="cfg_url" value="${url}" placeholder="https://...supabase.co">
+      <input id="cfg_key" value="${key}" placeholder="eyJhbGciOi...">
+      <button class="pill-btn primary" onclick="CloudDB.setCredentials(document.getElementById('cfg_url').value,document.getElementById('cfg_key').value);alert('Guardado. Recarga la página.');location.reload();">${Icons.svg('check', 12)} Guardar y reconectar</button>`;
     const modal = document.createElement('div');
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:flex;align-items:center;justify-content:center;';
-    modal.innerHTML = `<div style="background:rgba(8,14,30,0.95);border:1px solid rgba(77,240,255,0.4);border-radius:18px;padding:24px;width:90%;max-width:500px;">${content}<button class="pill-btn" onclick="this.closest('div').parentElement.remove()" style="margin-top:8px;">Cerrar</button></div>`;
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-card">${content}<button class="pill-btn" onclick="this.closest('.modal-overlay').remove()" style="margin-top:8px;">Cerrar</button></div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
   },
