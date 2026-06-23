@@ -686,7 +686,12 @@ const App = {
       <h3>${Icons.svg('settings', 16)} Backend (opcional)</h3>
       <p>URL de tu backend desplegado (Vercel, etc.). Activa la generación real de demos con Claude, la verificación en vivo de Resend/Anthropic y las notificaciones push.</p>
       <input id="cfg_backend_url" value="${backendUrl}" placeholder="https://tu-backend.vercel.app">
-      <button class="pill-btn primary" onclick="App.saveBackendUrl()">${Icons.svg('check', 12)} Guardar backend</button>`;
+      <button class="pill-btn primary" onclick="App.saveBackendUrl()">${Icons.svg('check', 12)} Guardar backend</button>
+      <hr style="margin:14px 0;border-color:var(--border);">
+      <h3>${Icons.svg('lock', 16)} Contraseña maestra</h3>
+      <p>Debe ser idéntica al <code>ADMIN_CODE</code> configurado en tu backend — es lo que autoriza las llamadas a <code>/api/*</code>.</p>
+      <input id="cfg_master_pass" type="password" value="${this.masterPassword || ''}" placeholder="Tu ADMIN_CODE">
+      <button class="pill-btn primary" onclick="App.saveMasterPassword()">${Icons.svg('check', 12)} Guardar contraseña</button>`;
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = `<div class="modal-card">${content}<button class="pill-btn" onclick="this.closest('.modal-overlay').remove()" style="margin-top:8px;">Cerrar</button></div>`;
@@ -698,6 +703,14 @@ const App = {
     const input = document.getElementById('cfg_backend_url');
     const val = (input.value || '').trim().replace(/\/$/, '');
     localStorage.setItem('axiom_backend_url', val);
+    alert('Guardado. Recarga la página.');
+    location.reload();
+  },
+
+  saveMasterPassword() {
+    const input = document.getElementById('cfg_master_pass');
+    const val = input.value || '';
+    localStorage.setItem('axiom_master_pass', val);
     alert('Guardado. Recarga la página.');
     location.reload();
   },
