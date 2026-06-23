@@ -332,7 +332,7 @@ const App = {
           ${cl.stage === 'nuevo' ? `<button class="pill-btn primary" onclick="App.contactClient('${cl.id}')">${Icons.svg('mail', 12)}</button>` : ''}
           ${cl.stage === 'contactado' ? `<button class="pill-btn primary" onclick="App.sendDemo('${cl.id}')">${Icons.svg('flask', 12)}</button>` : ''}
           ${cl.stage === 'demo_enviada' ? `<button class="pill-btn approve" onclick="App.approveClient('${cl.id}')">${Icons.svg('check', 12)}</button>` : ''}
-          ${cl.stage === 'aprobado' ? `<button class="pill-btn gold" onclick="App.completeProduct('${cl.id}')">${Icons.svg('microscope', 12)}</button>` : ''}
+          ${cl.stage === 'aprobado' ? `<button class="pill-btn gold" onclick="App.requestPayment('${cl.id}')">${Icons.svg('microscope', 12)}</button>` : ''}
         </div>`).join('') || `<div class="empty-state">${Icons.svg('target', 28)}<span>Sin clientes en el pipeline</span></div>`}
       </div></div>`;
   },
@@ -787,6 +787,88 @@ const App = {
     this.toast(`€${c.budget}`);
     this.notify('AXIOM CORE', `${c.name} completó su producto (+€${c.budget})`);
     this.renderShell(); this.render();
+  },
+
+  /** Genera un enlace de pago real de Stripe Checkout para el presupuesto del cliente.
+   * Si ya existe uno pendiente, vuelve a mostrarlo en vez de crear otro. */
+  async requestPayment(id) {
+    const c = this.store.clients.find(x => x.id === id);
+    if (!c || c.stage !== 'aprobado') return;
+    const stripeKey = this.connections.getKey('stripe');
+    if (!stripeKey) return this.toast('Configura tu clave de Stripe en Conexiones primero');
+    if (!this.backendUrl) return this.toast('Configura la URL del backend en Ajustes primero');
+
+    if (c.paymentUrl) return this.showPaymentModal(c);
+
+    this.toast('Generando enlace de pago...');
+    try {
+      const r = await fetch(`${this.backendUrl}/api/stripe/create-payment-link`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+        body: JSON.stringify({
+          key: stripeKey,
+          amount: c.budget,
+          clientName: c.name,
+          successUrl: `${location.origin}${location.pathname}?pago=ok`,
+          cancelUrl: `${location.origin}${location.pathname}?pago=cancelado`
+        })
+      });
+      const data = await r.json();
+      if (!data.ok) return this.toast(data.error || 'No se pudo crear el enlace de pago');
+      c.paymentUrl = data.url;
+      c.paymentSessionId = data.sessionId;
+      this.saveLocal();
+      if (this.cloud.connected) this.cloud.update('clients', id, { payment_url: data.url, payment_session_id: data.sessionId });
+      this.showPaymentModal(c);
+    } catch {
+      this.toast('No se pudo contactar con el backend');
+    }
+  },
+
+  /** Muestra el enlace de pago generado y permite verificar en vivo si Stripe ya lo cobró. */
+  showPaymentModal(c) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-card">
+      <h3>${Icons.svg('euro', 16)} Cobro a ${c.name}</h3>
+      <p>Envía este enlace al cliente para que pague <strong>€${(c.budget || 0).toLocaleString()}</strong> con tarjeta:</p>
+      <input id="paymentUrlInput" value="${c.paymentUrl}" readonly>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="pill-btn" id="copyPaymentBtn">${Icons.svg('check', 12)} Copiar enlace</button>
+        <button class="pill-btn primary" id="checkPaymentBtn">${Icons.svg('activity', 12)} Verificar pago</button>
+      </div>
+      <p id="paymentStatusMsg" style="margin-top:8px;"></p>
+      <button class="pill-btn" onclick="this.closest('.modal-overlay').remove()" style="margin-top:8px;">Cerrar</button>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    modal.querySelector('#copyPaymentBtn').onclick = () => {
+      navigator.clipboard?.writeText(c.paymentUrl);
+      this.toast('Enlace copiado');
+    };
+    modal.querySelector('#checkPaymentBtn').onclick = async () => {
+      const msg = modal.querySelector('#paymentStatusMsg');
+      msg.textContent = 'Comprobando...';
+      try {
+        const stripeKey = this.connections.getKey('stripe');
+        const r = await fetch(`${this.backendUrl}/api/stripe/check-payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+          body: JSON.stringify({ key: stripeKey, sessionId: c.paymentSessionId })
+        });
+        const data = await r.json();
+        if (!data.ok) { msg.textContent = data.error || 'No se pudo comprobar'; return; }
+        if (data.paid) {
+          modal.remove();
+          this.completeProduct(c.id);
+          this.toast('Pago confirmado');
+        } else {
+          msg.textContent = `Aún no se ha completado el pago (estado: ${data.status})`;
+        }
+      } catch {
+        msg.textContent = 'No se pudo contactar con el backend';
+      }
+    };
   },
 
   async runSalesCycle() {

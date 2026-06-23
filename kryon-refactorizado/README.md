@@ -125,7 +125,9 @@ Todas las rutas bajo `/api/*` (excepto `/api/health`) requieren la cabecera
 | GET | `/api/push/vapid-public-key` | Clave pública VAPID |
 | POST | `/api/push/subscribe` | Registra una suscripción push |
 | POST | `/api/push/send` | Envía una notificación push |
-| POST | `/api/connections/test` | Verifica en vivo una clave de Resend o Anthropic |
+| POST | `/api/connections/test` | Verifica en vivo una clave de Resend, Anthropic, Stripe, Meta, TikTok, LinkedIn o X |
+| POST | `/api/stripe/create-payment-link` | Crea un enlace real de Stripe Checkout para el presupuesto de un cliente |
+| POST | `/api/stripe/check-payment` | Comprueba si una sesión de Stripe Checkout ya fue pagada |
 
 ## Despliegue en Vercel
 
