@@ -726,40 +726,44 @@ const App = {
 
   async sendDemo(id) {
     const c = this.store.clients.find(x => x.id === id);
-    if (!c) return;
+    if (!c || c.stage !== 'contactado') return;
+    const code = await this.claude.generateAppCode(c);
     if (!this.autoMode) {
-      const confirmed = await this.confirmSend(c);
+      const confirmed = await this.confirmSend(c, code);
       if (!confirmed) return;
     }
-    const result = this.pipeline.sendDemo(id);
+    const result = this.pipeline.sendDemo(id, code);
     if (!result) return;
-    const { client, app } = result;
-    app.code = await this.claude.generateAppCode(client);
+    const { app } = result;
     this.saveLocal();
     if (this.cloud.connected) { this.cloud.insert('apps', app); this.cloud.update('clients', id, { stage: 'demo_enviada', demo_id: app.id }); }
     this.toast('Demo');
     this.renderShell(); this.render();
   },
 
-  /** Muestra al usuario lo que está a punto de enviarse a un cliente (presupuesto, demo)
-   * antes de hacerlo, y espera su confirmación. @returns {Promise<boolean>} */
-  confirmSend(c) {
+  /** Muestra al usuario el contenido exacto (HTML real) que se le enviaría al cliente
+   * — junto con sus datos (presupuesto, sector) — y espera su confirmación antes de
+   * enviarlo de verdad. @returns {Promise<boolean>} */
+  confirmSend(c, code) {
     return new Promise((resolve) => {
       const modal = document.createElement('div');
       modal.className = 'modal-overlay';
-      modal.innerHTML = `<div class="modal-card">
+      modal.innerHTML = `<div class="modal-card" style="max-width:560px;">
         <h3>${Icons.svg('flask', 16)} Revisar antes de enviar</h3>
         <p><strong>Cliente:</strong> ${c.name}<br>
         <strong>Sector:</strong> ${c.sector}<br>
         <strong>Necesidad:</strong> ${c.need || 'general'}<br>
         <strong>Presupuesto:</strong> €${(c.budget || 0).toLocaleString()}</p>
-        <p>Se generará y enviará una demo a este cliente con estos datos.</p>
+        <p>Esto es exactamente lo que recibirá el cliente:</p>
+        <div class="browser-frame"><div class="browser-frame-bar"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span><span class="url">demo-${this.slugify(c.name)}.app</span></div>
+        <iframe id="sendPreviewFrame" sandbox="" style="width:100%;height:260px;border:none;background:#fff;"></iframe></div>
         <div style="display:flex;gap:8px;margin-top:10px;">
           <button class="pill-btn primary" id="confirmSendBtn">${Icons.svg('check', 12)} Enviar</button>
           <button class="pill-btn" id="cancelSendBtn">Cancelar</button>
         </div>
       </div>`;
       document.body.appendChild(modal);
+      modal.querySelector('#sendPreviewFrame').srcdoc = code;
       const cleanup = (val) => { modal.remove(); resolve(val); };
       modal.querySelector('#confirmSendBtn').onclick = () => cleanup(true);
       modal.querySelector('#cancelSendBtn').onclick = () => cleanup(false);

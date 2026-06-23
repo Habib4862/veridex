@@ -51,10 +51,10 @@ class PipelineManager {
     return c;
   }
 
-  sendDemo(id) {
+  sendDemo(id, code) {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'contactado') return null;
-    const app = { id: 'a_' + Date.now(), name: `Demo ${c.sector}`, code: `<h1>Demo para ${c.name}</h1>`, status: 'demo', clientId: c.id, project_id: this.store.activeProjectId };
+    const app = { id: 'a_' + Date.now(), name: `Demo ${c.sector}`, code: code || `<h1>Demo para ${c.name}</h1>`, status: 'demo', clientId: c.id, project_id: this.store.activeProjectId };
     this.store.apps.unshift(app);
     c.stage = 'demo_enviada';
     c.demoId = app.id;
