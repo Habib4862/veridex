@@ -4,15 +4,43 @@
  * para esta comprobación puntual contra el servicio externo; el backend
  * no la persiste en ningún sitio.
  *
- * Nota de honestidad: Resend, Anthropic, Stripe, Meta, TikTok, LinkedIn y X
- * se verifican aquí porque sus APIs bloquean llamadas directas desde el
- * navegador (CORS). Supabase se verifica directamente desde el frontend
- * (su API REST sí permite CORS). Google Ads y GA4 de Google usan OAuth2
- * con varias credenciales en vez de una sola clave, así que no tienen
- * verificación en vivo implementada aquí.
+ * Nota de honestidad: Resend, Anthropic, Stripe, Meta, TikTok, LinkedIn, X y
+ * GA4 se verifican aquí porque sus APIs bloquean llamadas directas desde el
+ * navegador (CORS), o (en el caso de GA4) requieren un intercambio OAuth2
+ * de cuenta de servicio que no puede hacerse desde el navegador. Supabase
+ * se verifica directamente desde el frontend (su API REST sí permite
+ * CORS). Google Ads usa OAuth2 con varias credenciales en vez de una sola
+ * clave, así que no tiene verificación en vivo implementada aquí.
  */
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
+
+function base64url(buf) {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** Intercambia las credenciales de una cuenta de servicio de Google por un access token,
+ * firmando un JWT con la clave privada (flujo OAuth2 server-to-server, sin navegador). */
+async function getGoogleAccessToken(clientEmail, privateKey, scope) {
+  const header = base64url(Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+  const now = Math.floor(Date.now() / 1000);
+  const claims = base64url(Buffer.from(JSON.stringify({
+    iss: clientEmail, scope, aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now
+  })));
+  const signingInput = `${header}.${claims}`;
+  const signature = base64url(crypto.createSign('RSA-SHA256').update(signingInput).sign(privateKey));
+  const jwt = `${signingInput}.${signature}`;
+
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer', assertion: jwt })
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error_description || 'No se pudo autenticar con Google (revisa client_email y private_key)');
+  return data.access_token;
+}
 
 router.post('/test', async (req, res) => {
   const { service, key } = req.body || {};
@@ -67,6 +95,32 @@ router.post('/test', async (req, res) => {
       if (r.status === 401) return res.json({ ok: false, error: 'Clave inválida' });
       if (!r.ok) return res.json({ ok: false, error: `X respondió ${r.status}` });
       return res.json({ ok: true, detail: 'acceso confirmado a la API de X' });
+    }
+
+    if (service === 'ga4') {
+      let creds;
+      try { creds = JSON.parse(key); } catch { return res.json({ ok: false, error: 'El JSON de la cuenta de servicio no es válido' }); }
+      const { client_email: clientEmail, private_key: privateKey, property_id: propertyId } = creds;
+      if (!clientEmail || !privateKey || !propertyId) {
+        return res.json({ ok: false, error: 'Falta client_email, private_key o property_id en el JSON' });
+      }
+      let accessToken;
+      try {
+        accessToken = await getGoogleAccessToken(clientEmail, privateKey, 'https://www.googleapis.com/auth/analytics.readonly');
+      } catch (e) {
+        return res.json({ ok: false, error: e.message });
+      }
+      const r = await fetch(`https://analyticsdata.googleapis.com/v1beta/properties/${propertyId}:runReport`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ dateRanges: [{ startDate: 'today', endDate: 'today' }], metrics: [{ name: 'activeUsers' }] })
+      });
+      if (r.status === 403) return res.json({ ok: false, error: 'La cuenta de servicio no tiene acceso a esta propiedad (añádela como Lector en GA4 → Administrar → Acceso a la propiedad)' });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        return res.json({ ok: false, error: d.error?.message || `GA4 respondió ${r.status}` });
+      }
+      return res.json({ ok: true, detail: 'acceso confirmado a la API de Google Analytics 4' });
     }
 
     return res.status(400).json({ ok: false, error: 'Esta integración todavía no tiene verificación en vivo en el backend' });

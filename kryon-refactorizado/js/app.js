@@ -394,8 +394,9 @@ const App = {
             <div class="card">
               <div class="card-header" style="color:${conn.color};"><span class="conn-badge" style="background:${conn.color};color:${this.contrastColor(conn.color)};">${this.initials(conn.name)}</span>${conn.name}</div>
               <div class="conn-status"><span class="connection-dot ${conn.configured ? 'on' : 'off'}"></span>${conn.configured ? 'Configurada' : 'Sin configurar'}${conn.live ? '' : ' · próximamente'}</div>
+              ${conn.id === 'ga4' && !conn.configured ? `<div style="font-size:0.55rem;color:var(--dim);margin-bottom:4px;">Pega el JSON de la cuenta de servicio de Google Cloud, añadiendo un campo "property_id" con el ID de tu propiedad GA4</div>` : ''}
               <div class="conn-input-row">
-                <input type="password" id="conn_input_${conn.id}" placeholder="${conn.configured ? '••••••••' : 'Pegar API key...'}">
+                <input type="password" id="conn_input_${conn.id}" placeholder="${conn.configured ? '••••••••' : (conn.id === 'ga4' ? 'Pegar JSON de cuenta de servicio...' : 'Pegar API key...')}">
                 <button class="pill-btn primary" onclick="App.saveConnectionKey('${conn.id}')">${Icons.svg('check', 12)}</button>
                 ${conn.configured ? `<button class="pill-btn" onclick="App.clearConnectionKey('${conn.id}')">${Icons.svg('x', 12)}</button>` : ''}
               </div>
