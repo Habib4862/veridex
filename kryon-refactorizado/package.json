@@ -26,8 +26,10 @@
       "sw.js",
       "css/**/*",
       "js/**/*",
-      "electron/**/*",
-      "kryon.config.json"
+      "electron/**/*"
+    ],
+    "extraFiles": [
+      { "from": "kryon.config.example.json", "to": "kryon.config.json" }
     ],
     "directories": { "output": "dist" }
   }
