@@ -2,18 +2,21 @@
  * connections.js — Registro de las 10 conexiones externas de AXIOM CORE
  * y una cola con prioridad para limitar llamadas API concurrentes.
  *
- * Nota de honestidad: solo Supabase, Resend y Anthropic tienen un endpoint
- * de salud real implementado (vía backend). Stripe, Meta, Google Ads,
- * TikTok, LinkedIn, X y GA4 se exponen como tarjetas de estado/credenciales
- * listas para que cada integración real se conecte sin tocar la UI.
+ * Nota de honestidad: Supabase, Resend, Anthropic, Stripe, Meta, TikTok y
+ * LinkedIn tienen un endpoint de salud real implementado (vía backend, o
+ * directo al frontend en el caso de Supabase). Google Ads y GA4 de Google
+ * usan OAuth2 con varias credenciales (client id/secret, refresh token) en
+ * lugar de una sola clave pegada, así que no se pueden verificar en vivo
+ * con este campo único — se exponen como tarjetas de formato/credenciales
+ * listas para conectarse cuando se implemente ese flujo OAuth.
  */
 const CONNECTIONS_REGISTRY = [
-  { id: 'stripe', name: 'Stripe', color: '#635bff', storageKey: 'axiom_key_stripe', live: false, keyPattern: /^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/, liveTest: false },
-  { id: 'meta', name: 'Meta Ads', color: '#0866ff', storageKey: 'axiom_key_meta', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'stripe', name: 'Stripe', color: '#635bff', storageKey: 'axiom_key_stripe', live: false, keyPattern: /^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/, liveTest: true },
+  { id: 'meta', name: 'Meta Ads', color: '#0866ff', storageKey: 'axiom_key_meta', live: false, keyPattern: /^.{16,}$/, liveTest: true },
   { id: 'google_ads', name: 'Google Ads', color: '#fbbc05', storageKey: 'axiom_key_google_ads', live: false, keyPattern: /^.{16,}$/, liveTest: false },
-  { id: 'tiktok', name: 'TikTok', color: '#ff0050', storageKey: 'axiom_key_tiktok', live: false, keyPattern: /^.{16,}$/, liveTest: false },
-  { id: 'linkedin', name: 'LinkedIn', color: '#0a66c2', storageKey: 'axiom_key_linkedin', live: false, keyPattern: /^.{16,}$/, liveTest: false },
-  { id: 'x', name: 'X (Twitter)', color: '#e2e4ed', storageKey: 'axiom_key_x', live: false, keyPattern: /^.{16,}$/, liveTest: false },
+  { id: 'tiktok', name: 'TikTok', color: '#ff0050', storageKey: 'axiom_key_tiktok', live: false, keyPattern: /^.{16,}$/, liveTest: true },
+  { id: 'linkedin', name: 'LinkedIn', color: '#0a66c2', storageKey: 'axiom_key_linkedin', live: false, keyPattern: /^.{16,}$/, liveTest: true },
+  { id: 'x', name: 'X (Twitter)', color: '#e2e4ed', storageKey: 'axiom_key_x', live: false, keyPattern: /^.{16,}$/, liveTest: true },
   { id: 'ga4', name: 'Google Analytics 4', color: '#f9ab00', storageKey: 'axiom_key_ga4', live: false, keyPattern: /^.{16,}$/, liveTest: false },
   { id: 'supabase', name: 'Supabase', color: '#3ecf8e', storageKey: 'axiom_supabase_key', live: true, keyPattern: /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/, liveTest: true },
   { id: 'resend', name: 'Resend', color: '#000000', storageKey: 'axiom_key_resend', live: true, keyPattern: /^re_[A-Za-z0-9_]+$/, liveTest: true },
