@@ -5,7 +5,7 @@
  */
 function auth(req, res, next) {
   const header = req.headers['x-admin-password'] || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  const expected = process.env.ADMIN_CODE || 'kryon2026';
+  const expected = process.env.ADMIN_CODE || 'AXIOM2000';
   if (!header || header !== expected) {
     return res.status(401).json({ error: 'No autorizado' });
   }

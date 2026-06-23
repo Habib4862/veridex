@@ -101,7 +101,7 @@ const App = {
 
   login() {
     const pass = document.getElementById('loginPass').value;
-    if (pass === 'kryon2026' || pass === localStorage.getItem('axiom_master_pass')) {
+    if (pass === 'AXIOM2000' || pass === localStorage.getItem('axiom_master_pass')) {
       localStorage.setItem('axiom_master_pass', pass);
       this.masterPassword = pass;
       this.claude.setAuthPassword(pass);

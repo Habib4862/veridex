@@ -74,7 +74,7 @@ modo:
 
    | Variable | Activa |
    |---|---|
-   | `ADMIN_CODE` | Contraseña maestra del panel (por defecto `kryon2026`) |
+   | `ADMIN_CODE` | Contraseña maestra del panel (por defecto `AXIOM2000`) |
    | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Persistencia de proyectos/clientes/oportunidades/apps |
    | `ANTHROPIC_API_KEY` | Generación real de demos con Claude (si falta, responde con plantilla simple) |
    | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Notificaciones Web Push |
