@@ -19,6 +19,7 @@ const metricsRoute = require('./routes/metrics');
 const claudeRoute = require('./routes/claude');
 const pushRoute = require('./routes/push');
 const connectionsRoute = require('./routes/connections');
+const stripeRoute = require('./routes/stripe');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -39,6 +40,7 @@ app.use('/api/metrics', metricsRoute);
 app.use('/api/claude', claudeRoute);
 app.use('/api/push', pushRoute);
 app.use('/api/connections', connectionsRoute);
+app.use('/api/stripe', stripeRoute);
 
 app.use((req, res) => res.status(404).json({ error: 'No encontrado' }));
 
