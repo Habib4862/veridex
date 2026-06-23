@@ -32,6 +32,33 @@ describe('ConnectionsManager', () => {
     expect(new ConnectionsManager({ connected: false }).isCloudConnected()).toBe(false);
     expect(new ConnectionsManager(null).isCloudConnected()).toBe(false);
   });
+
+  it('validates key format against each integration pattern', () => {
+    const mgr = new ConnectionsManager(null);
+    expect(mgr.validateFormat('anthropic', 'sk-ant-abc123')).toBe(true);
+    expect(mgr.validateFormat('anthropic', 'not-a-key')).toBe(false);
+    expect(mgr.validateFormat('resend', 're_abc123')).toBe(true);
+    expect(mgr.validateFormat('resend', 'abc123')).toBe(false);
+    expect(mgr.validateFormat('stripe', 'sk_test_abcdefghij')).toBe(true);
+    expect(mgr.validateFormat('stripe', 'short')).toBe(false);
+    expect(mgr.validateFormat('anthropic', '')).toBe(false);
+  });
+
+  it('reports which integrations support a real live test vs. format-only', () => {
+    const mgr = new ConnectionsManager(null);
+    expect(mgr.supportsLiveTest('supabase')).toBe(true);
+    expect(mgr.supportsLiveTest('resend')).toBe(true);
+    expect(mgr.supportsLiveTest('anthropic')).toBe(true);
+    expect(mgr.supportsLiveTest('stripe')).toBe(false);
+    expect(mgr.supportsLiveTest('meta')).toBe(false);
+  });
+
+  it('returns the stored key value via getKey', () => {
+    const mgr = new ConnectionsManager(null);
+    expect(mgr.getKey('resend')).toBe('');
+    mgr.setKey('resend', 're_abc123');
+    expect(mgr.getKey('resend')).toBe('re_abc123');
+  });
 });
 
 describe('APIQueue', () => {

@@ -14,6 +14,20 @@ function debounce(fn, delay = 250) {
   };
 }
 
+/** Hasta 2 iniciales en mayúscula a partir de un nombre. */
+function initials(name = '') {
+  return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || '').join('') || '?';
+}
+
+/** Negro o blanco según la luminancia del color de fondo, para mantener contraste legible. */
+function contrastColor(hex = '#888888') {
+  const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!m) return '#fff';
+  const [r, g, b] = [m[1], m[2], m[3]].map(h => parseInt(h, 16));
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.6 ? '#0b1220' : '#fff';
+}
+
 /** Iconos SVG inline (estilo Lucide) — sustituyen a los emojis de la UI. */
 const Icons = {
   paths: {
@@ -45,7 +59,9 @@ const Icons = {
     plus: '<path d="M12 5v14M5 12h14"/>',
     lock: '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
     scale: '<path d="M16 3h5v5M8 3H3v5M3 16v5h5M16 21h5v-5"/>',
-    megaphone: '<path d="M3 11v3a1 1 0 0 0 1 1h2l3 5h2v-7M21 4 8 9H3v6h5l13 5z"/>'
+    megaphone: '<path d="M3 11v3a1 1 0 0 0 1 1h2l3 5h2v-7M21 4 8 9H3v6h5l13 5z"/>',
+    x: '<path d="M18 6 6 18"/><path d="M6 6l12 12"/>',
+    alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>'
   },
   svg(name, size = 14) {
     const p = this.paths[name] || this.paths.sparkles;
@@ -69,6 +85,7 @@ const App = {
   async init() {
     this.applyStoredTheme();
     BrainEngine.init();
+    this.backendUrl = (localStorage.getItem('axiom_backend_url') || '').replace(/\/$/, '');
     this.cloud = CloudDB;
     this.connections = new ConnectionsManager(this.cloud);
     this.agentsManager = new AgentsManager();
@@ -101,7 +118,7 @@ const App = {
 
   login() {
     const pass = document.getElementById('loginPass').value;
-    if (pass === 'kryon2026' || pass === localStorage.getItem('axiom_master_pass')) {
+    if (pass === 'AXIOM2000' || pass === localStorage.getItem('axiom_master_pass')) {
       localStorage.setItem('axiom_master_pass', pass);
       this.masterPassword = pass;
       this.claude.setAuthPassword(pass);
@@ -116,9 +133,8 @@ const App = {
   afterLoad() {
     this.agentsManager.load(this.store.activeProjectId);
     this.renderShell();
-    this.render();
+    this.render(true);
     this.startCycles();
-    this.observeReveal();
   },
 
   async loadFromCloud() {
@@ -202,7 +218,7 @@ const App = {
     document.documentElement.setAttribute('data-theme', next);
     localStorage.setItem('axiom_theme', next);
     this.renderShell();
-    this.render();
+    this.render(true);
   },
 
   /* --------------------------------- Render --------------------------------- */
@@ -225,12 +241,12 @@ const App = {
           <div class="project-selector"><select id="projectSelect" onchange="App.switchProject(this.value)">${opts}</select><button onclick="App.showNewProjectModal()" title="Nuevo proyecto">${Icons.svg('plus', 12)}</button></div>
           <button class="pill-btn gold" onclick="App.runSalesCycle()">${Icons.svg('pipeline', 13)} Pipeline</button>
           <button class="pill-btn primary" onclick="App.analyzeInvestment()">${Icons.svg('coins', 13)} Invertir</button>
-          <button class="pill-btn" id="autoBtn" onclick="App.toggleAuto()">${Icons.svg('activity', 13)} Auto: ${this.autoMode ? 'ON' : 'OFF'}</button>
+          <button class="pill-btn" id="autoBtn" onclick="App.toggleAuto()" title="Activar/desactivar ciclo automático">${this.autoMode ? '<span class="live-dot"></span>' : Icons.svg('activity', 13)} Auto: ${this.autoMode ? 'ON' : 'OFF'}</button>
           <button class="pill-btn" onclick="App.exportPDF()">${Icons.svg('download', 13)} PDF</button>
-          <button class="pill-btn" onclick="App.requestPush()">${Icons.svg('bell', 13)}</button>
+          <button class="pill-btn" onclick="App.requestPush()" title="Activar notificaciones push">${Icons.svg('bell', 13)}</button>
           <button class="theme-toggle" onclick="App.toggleTheme()" title="Cambiar tema">${Icons.svg(theme === 'dark' ? 'sun' : 'moon', 14)}</button>
-          <button class="pill-btn" onclick="App.showConfigModal()">${Icons.svg('settings', 13)}</button>
-          <button class="pill-btn heal" onclick="App.forceHealing()">${Icons.svg('activity', 13)}</button>
+          <button class="pill-btn" onclick="App.showConfigModal()" title="Configuración de conexión cloud">${Icons.svg('settings', 13)}</button>
+          <button class="pill-btn heal" onclick="App.forceHealing()" title="Forzar diagnóstico y auto-sanación">${Icons.svg('activity', 13)}</button>
         </div>
       </header>
       <nav class="nav-tabs" id="navTabs">
@@ -251,13 +267,19 @@ const App = {
         document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         this.currentTab = tab.dataset.tab;
-        this.render();
+        this.render(true);
       };
       if (tab.dataset.tab === this.currentTab) { document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active'); }
     });
   },
 
-  render() {
+  /**
+   * @param {boolean} animate Si es true, las tarjetas hacen fade-in (solo al
+   * cambiar de pestaña/proyecto o cargar por primera vez). Los refrescos de
+   * fondo (ciclos automáticos, acciones del pipeline) usan false para que el
+   * contenido no parpadee (desaparezca y reaparezca) mientras el usuario mira.
+   */
+  render(animate = false) {
     const c = document.getElementById('mainContent');
     if (!c) return;
     switch (this.currentTab) {
@@ -267,21 +289,25 @@ const App = {
       case 'creator': this.renderCreator(c); break;
       case 'agents': this.renderAgents(c); break;
       case 'connections': this.renderConnections(c); break;
-      case 'pricing': c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('euro')} Precios</div><p style="color:var(--dim);">VERIDEX: 25€ | Landing: 500€ | App: 1000€ | Dashboard: 2500€ | Consultoría: 2000€ | Licencia KRYON: 149€/mes</p></div>`; break;
+      case 'pricing': c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('euro')} Precios</div>
+        <div class="grid grid-3">${[
+          ['VERIDEX', '25€'], ['Landing', '500€'], ['App', '1000€'],
+          ['Dashboard', '2500€'], ['Consultoría', '2000€'], ['Licencia KRYON', '149€/mes']
+        ].map(([name, price]) => `<div class="price-card"><div class="price-name">${name}</div><div class="price-value">${price}</div></div>`).join('')}</div></div>`; break;
       case 'editor': this.renderEditor(c); break;
       case 'health': this.renderHealth(c); break;
       case 'logs': this.renderLogs(c); break;
     }
-    this.observeReveal();
+    if (animate) this.observeReveal();
   },
 
   renderDashboard(c) {
     c.innerHTML = `
       <div class="grid grid-4">
-        <div class="card"><div class="card-header">${Icons.svg('target')} Oport</div><div class="metric-value">${this.store.opportunities.length}</div></div>
-        <div class="card"><div class="card-header">${Icons.svg('target')} Clientes</div><div class="metric-value">${this.store.clients.length}</div></div>
-        <div class="card"><div class="card-header">${Icons.svg('wrench')} Apps</div><div class="metric-value">${this.store.apps.length}</div></div>
-        <div class="card"><div class="card-header">${Icons.svg('euro')} Cartera</div><div class="metric-value">€${(this.store.portfolio.total || 25000).toLocaleString()}</div></div>
+        <div class="card accent-cyan"><div class="card-header">${Icons.svg('target')} Oport</div><div class="metric-value">${this.store.opportunities.length}</div></div>
+        <div class="card accent-purple"><div class="card-header">${Icons.svg('target')} Clientes</div><div class="metric-value">${this.store.clients.length}</div></div>
+        <div class="card accent-green"><div class="card-header">${Icons.svg('wrench')} Apps</div><div class="metric-value">${this.store.apps.length}</div></div>
+        <div class="card accent-gold"><div class="card-header">${Icons.svg('euro')} Cartera</div><div class="metric-value">€${(this.store.portfolio.total || 25000).toLocaleString()}</div></div>
       </div>
       <div class="grid grid-2">
         <div class="card"><div class="card-header">${Icons.svg('dashboard')} Evolución <button class="pill-btn" style="font-size:0.6rem;" onclick="App.toggleCompare()">Comparar proyectos</button></div><div class="chart-container"><canvas id="mainChart"></canvas></div><div id="compareArea"></div></div>
@@ -290,17 +316,24 @@ const App = {
     setTimeout(() => this.updateChart(), 300);
   },
 
+  stageOrder: ['nuevo', 'contactado', 'demo_enviada', 'aprobado', 'completado'],
+
+  stageTrackHtml(stage) {
+    const idx = this.stageOrder.indexOf(stage);
+    return `<div class="stage-track">${this.stageOrder.map((s, i) => `<span class="seg ${i <= idx ? 'done' : ''}"></span>`).join('')}</div>`;
+  },
+
   renderPipeline(c) {
     c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('pipeline')} Pipeline <button class="pill-btn primary" onclick="App.runSalesCycle()">${Icons.svg('check', 12)} Ejecutar</button></div>
       <div class="node-list">${this.store.clients.map(cl => `
-        <div class="node-item"><div class="node-dot" style="background:var(--orange);box-shadow:0 0 8px var(--orange);"></div>
-          <div style="flex:1;"><strong>${cl.name}</strong> · ${cl.sector} · €${cl.budget}</div>
+        <div class="node-item"><div class="avatar-circle">${this.initials(cl.name)}</div>
+          <div style="flex:1;"><strong>${cl.name}</strong> · ${cl.sector} · €${cl.budget}${this.stageTrackHtml(cl.stage)}</div>
           <span class="pipeline-stage stage-${cl.stage}">${cl.stage.toUpperCase().replace('_', ' ')}</span>
           ${cl.stage === 'nuevo' ? `<button class="pill-btn primary" onclick="App.contactClient('${cl.id}')">${Icons.svg('mail', 12)}</button>` : ''}
           ${cl.stage === 'contactado' ? `<button class="pill-btn primary" onclick="App.sendDemo('${cl.id}')">${Icons.svg('flask', 12)}</button>` : ''}
           ${cl.stage === 'demo_enviada' ? `<button class="pill-btn approve" onclick="App.approveClient('${cl.id}')">${Icons.svg('check', 12)}</button>` : ''}
           ${cl.stage === 'aprobado' ? `<button class="pill-btn gold" onclick="App.completeProduct('${cl.id}')">${Icons.svg('microscope', 12)}</button>` : ''}
-        </div>`).join('') || '<p style="color:var(--muted);">Sin clientes</p>'}
+        </div>`).join('') || `<div class="empty-state">${Icons.svg('target', 28)}<span>Sin clientes en el pipeline</span></div>`}
       </div></div>`;
   },
 
@@ -317,39 +350,157 @@ const App = {
   },
 
   clientListHtml(list) {
-    return list.map(cl => `<div class="node-item"><div class="node-dot" style="background:var(--orange);"></div><div><strong>${cl.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${cl.sector} · €${cl.budget}</div></div></div>`).join('') || '<p style="color:var(--muted);">Sin resultados</p>';
+    return list.map(cl => `<div class="node-item"><div class="avatar-circle">${this.initials(cl.name)}</div><div style="flex:1;"><strong>${cl.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${cl.sector} · €${cl.budget}</div>${this.stageTrackHtml(cl.stage)}</div><span class="pipeline-stage stage-${cl.stage}">${cl.stage.toUpperCase().replace('_', ' ')}</span></div>`).join('') || `<div class="empty-state">${Icons.svg('search', 28)}<span>Sin resultados</span></div>`;
   },
+
+  slugify(name = '') { return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'demo'; },
 
   renderCreator(c) {
     const demos = this.store.apps.filter(a => a.status === 'demo'), done = this.store.apps.filter(a => a.status === 'completed');
     c.innerHTML = `<div class="grid grid-2">
-      <div class="card"><div class="card-header">${Icons.svg('wrench')} Demos (${demos.length})</div>${demos.map(d => `<div class="node-item" onclick="App.preview('${d.id}')"><div class="node-dot" style="background:var(--gold);"></div><strong>${d.name}</strong></div>`).join('')}</div>
-      <div class="card"><div class="card-header">${Icons.svg('check')} Completadas</div>${done.map(d => `<div class="node-item"><div class="node-dot" style="background:var(--cyan);"></div><strong>${d.name}</strong></div>`).join('')}</div>
-      </div><div class="card"><div class="card-header">${Icons.svg('search')} Preview</div><div id="previewArea" style="height:300px;background:#000;border-radius:var(--radius-sm);"></div></div>`;
+      <div class="card"><div class="card-header">${Icons.svg('wrench')} Demos (${demos.length})</div>${demos.map(d => `<div class="node-item" onclick="App.preview('${d.id}')"><div class="node-dot" style="background:var(--gold);"></div><strong>${d.name}</strong></div>`).join('') || `<div class="empty-state">${Icons.svg('wrench', 24)}<span>Sin demos aún</span></div>`}</div>
+      <div class="card"><div class="card-header">${Icons.svg('check')} Completadas</div>${done.map(d => `<div class="node-item"><div class="node-dot" style="background:var(--cyan);"></div><strong>${d.name}</strong></div>`).join('') || `<div class="empty-state">${Icons.svg('check', 24)}<span>Sin completar aún</span></div>`}</div>
+      </div><div class="card"><div class="card-header">${Icons.svg('search')} Preview</div>
+        <div class="browser-frame"><div class="browser-frame-bar"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span><span class="url" id="previewUrl">kryon-demo.app</span></div>
+        <div id="previewArea" style="height:300px;background:#fff;"></div></div></div>`;
   },
 
   renderAgents(c) {
     c.innerHTML = `<div class="grid grid-3">${this.agentsManager.agents.map(a => `
-      <div class="card"><div class="card-header">${Icons.svg(a.icon, 13)} ${a.name} <span class="agent-level">Nv.${a.level}</span></div>
+      <div class="card">
+        <div class="agent-card-head"><div class="agent-avatar">${Icons.svg(a.icon, 17)}</div><div><div class="agent-name">${a.name}</div><span class="agent-level">Nv.${a.level}</span></div></div>
         <div style="font-size:0.55rem;color:var(--dim);">${a.xp} XP</div>
         <div class="xp-bar"><div class="xp-fill" style="width:${this.agentsManager.xpProgress(a)}%;"></div></div>
       </div>`).join('')}</div>`;
   },
 
+  connectionCategories: {
+    stripe: 'Pagos',
+    meta: 'Marketing', google_ads: 'Marketing', tiktok: 'Marketing', linkedin: 'Marketing', x: 'Marketing',
+    ga4: 'Analítica',
+    supabase: 'Infraestructura', resend: 'Infraestructura',
+    anthropic: 'IA'
+  },
+
   renderConnections(c) {
     const list = this.connections.list();
+    const categories = ['Pagos', 'Marketing', 'Analítica', 'Infraestructura', 'IA'];
     c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('cloud')} Conexiones (${list.filter(x => x.configured).length}/${list.length})</div>
-      <div class="grid grid-3">${list.map(conn => `
-        <div class="card"><div class="card-header" style="color:${conn.color};">${conn.name}</div>
-          <div style="font-size:0.6rem;color:${conn.configured ? 'var(--green)' : 'var(--muted)'};">${conn.configured ? 'Configurada' : 'Sin configurar'}${conn.live ? '' : ' · próximamente'}</div>
-        </div>`).join('')}</div></div>`;
+      ${categories.map(cat => {
+        const items = list.filter(conn => this.connectionCategories[conn.id] === cat);
+        if (!items.length) return '';
+        return `<div class="conn-category"><div class="conn-category-title">${cat}</div>
+          <div class="grid grid-3">${items.map(conn => `
+            <div class="card">
+              <div class="card-header" style="color:${conn.color};"><span class="conn-badge" style="background:${conn.color};color:${this.contrastColor(conn.color)};">${this.initials(conn.name)}</span>${conn.name}</div>
+              <div class="conn-status"><span class="connection-dot ${conn.configured ? 'on' : 'off'}"></span>${conn.configured ? 'Configurada' : 'Sin configurar'}${conn.live ? '' : ' · próximamente'}</div>
+              <div class="conn-input-row">
+                <input type="password" id="conn_input_${conn.id}" placeholder="${conn.configured ? '••••••••' : 'Pegar API key...'}">
+                <button class="pill-btn primary" onclick="App.saveConnectionKey('${conn.id}')">${Icons.svg('check', 12)}</button>
+                ${conn.configured ? `<button class="pill-btn" onclick="App.clearConnectionKey('${conn.id}')">${Icons.svg('x', 12)}</button>` : ''}
+              </div>
+              ${conn.configured ? `<button class="pill-btn" style="margin-top:6px;width:100%;justify-content:center;" onclick="App.testConnection('${conn.id}')">${Icons.svg('activity', 12)} Probar conexión</button>` : ''}
+              <div class="conn-test-result" id="conn_result_${conn.id}"></div>
+            </div>`).join('')}</div></div>`;
+      }).join('')}
+      </div>`;
+  },
+
+  initials(name) { return initials(name); },
+  contrastColor(hex) { return contrastColor(hex); },
+
+  async saveConnectionKey(id) {
+    const input = document.getElementById(`conn_input_${id}`);
+    const value = input?.value.trim();
+    if (!value) return;
+    this.connections.setKey(id, value);
+    this.toast('Clave guardada');
+    this.render();
+    await this.testConnection(id);
+  },
+
+  clearConnectionKey(id) {
+    this.connections.setKey(id, '');
+    this.toast('Clave eliminada');
+    this.render();
+  },
+
+  setConnTestResult(id, level, msg) {
+    const el = document.getElementById(`conn_result_${id}`);
+    if (!el) return;
+    const icon = { testing: 'search', ok: 'check', warn: 'alert', bad: 'x' }[level];
+    el.className = `conn-test-result ${level}`;
+    el.innerHTML = `${Icons.svg(icon, 12)} ${msg}`;
+  },
+
+  /** Comprueba si la clave guardada de `id` realmente funciona. Primero valida el formato
+   * sin red; si la integración tiene verificación en vivo real, la ejecuta y muestra el
+   * resultado exacto (conectada/funcionando, clave inválida, o sin backend disponible). */
+  async testConnection(id) {
+    const key = this.connections.getKey(id);
+    if (!key) return;
+    this.setConnTestResult(id, 'testing', 'Comprobando...');
+
+    if (!this.connections.validateFormat(id, key)) {
+      return this.setConnTestResult(id, 'bad', 'Formato de clave no reconocido');
+    }
+
+    if (!this.connections.supportsLiveTest(id)) {
+      return this.setConnTestResult(id, 'warn', 'Formato válido · sin verificación en vivo disponible aún');
+    }
+
+    try {
+      if (id === 'supabase') {
+        const url = localStorage.getItem('axiom_supabase_url') || '';
+        if (!url) return this.setConnTestResult(id, 'warn', 'Falta la URL del proyecto (Configuración Cloud)');
+        const r = await fetch(`${url}/rest/v1/projects?select=id&limit=1`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+        if (r.ok || r.status === 406) return this.setConnTestResult(id, 'ok', 'Conectada y funcionando');
+        if (r.status === 401 || r.status === 403) return this.setConnTestResult(id, 'bad', 'Clave inválida o sin permisos');
+        return this.setConnTestResult(id, 'bad', `Supabase respondió ${r.status}`);
+      }
+
+      if (!this.backendUrl) {
+        return this.setConnTestResult(id, 'warn', 'Configura la URL del backend para verificar esta clave en vivo');
+      }
+      const r = await fetch(`${this.backendUrl}/api/connections/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+        body: JSON.stringify({ service: id, key })
+      });
+      const data = await r.json();
+      if (data.ok) return this.setConnTestResult(id, 'ok', `Conectada y funcionando — ${data.detail}`);
+      return this.setConnTestResult(id, 'bad', data.error || 'Clave inválida');
+    } catch {
+      return this.setConnTestResult(id, 'bad', 'No se pudo contactar el servicio externo');
+    }
   },
 
   renderEditor(c) {
     c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('code')} Editor</div>
       <textarea class="code-editor" id="codeEditor" style="width:100%;min-height:300px;background:#000;color:var(--ice);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;">${this.store.apps[0]?.code || '<h1>Hola mundo</h1>'}</textarea>
       <button class="pill-btn primary" onclick="App.saveCode()" style="margin-top:8px;">${Icons.svg('check', 12)} Guardar</button>
-      <div id="editorPreview" style="height:300px;background:#fff;border-radius:var(--radius-sm);margin-top:8px;"></div></div>`;
+      <div class="browser-frame" style="margin-top:8px;"><div class="browser-frame-bar"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span><span class="url">kryon-demo.app/${this.slugify(this.store.apps[0]?.name)}</span></div>
+      <div id="editorPreview" style="height:300px;background:#fff;"></div></div></div>`;
+    document.getElementById('codeEditor').oninput = debounce(() => this.refreshEditorPreview(), 300);
+    this.refreshEditorPreview();
+  },
+
+  refreshEditorPreview() {
+    const code = document.getElementById('codeEditor')?.value || '';
+    const preview = document.getElementById('editorPreview');
+    if (preview) preview.innerHTML = `<iframe srcdoc="${code.replace(/"/g, '&quot;')}" style="width:100%;height:100%;border:none;"></iframe>`;
+  },
+
+  healthIcons: {
+    'Cerebro': 'brain', 'Agentes': 'cpu', 'Pipeline': 'pipeline', 'Detección': 'search',
+    'Persistencia': 'database', 'Conexiones': 'cloud', 'Backup': 'download', 'Sanación': 'heart'
+  },
+
+  healthStatus(val) {
+    if (val > 80) return { label: 'Excelente', color: 'var(--green)' };
+    if (val > 60) return { label: 'Bien', color: 'var(--green)' };
+    if (val > 30) return { label: 'Atención', color: 'var(--orange)' };
+    return { label: 'Crítico', color: 'var(--red)' };
   },
 
   renderHealth(c) {
@@ -359,16 +510,40 @@ const App = {
       agentsManager: this.agentsManager,
       lastBackupAt: this.lastBackupAt
     });
-    c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('heart')} Salud</div><div class="grid grid-2">${Object.entries(report).map(([name, val]) => `
-      <div class="card"><div class="card-header">${name}</div><div class="health-bar"><div class="health-fill" style="width:${val}%;background:${val > 60 ? 'var(--green)' : val > 30 ? 'var(--orange)' : 'var(--red)'};"></div></div></div>`).join('')}</div></div>`;
+    const entries = Object.entries(report);
+    const avg = Math.round(entries.reduce((s, [, v]) => s + v, 0) / entries.length);
+    const avgStatus = this.healthStatus(avg);
+    c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('heart')} Salud
+        <button class="pill-btn primary" style="margin-left:auto;" onclick="App.forceHealing()">${Icons.svg('activity', 12)} Sanar ahora</button>
+      </div>
+      <div class="health-row"><span class="health-status" style="color:${avgStatus.color};">${avg}% — ${avgStatus.label} (promedio general)</span></div>
+      <div class="health-bar"><div class="health-fill" style="width:${avg}%;background:${avgStatus.color};"></div></div>
+      <div class="grid grid-2" style="margin-top:14px;">${entries.map(([name, val]) => {
+        const status = this.healthStatus(val);
+        return `<div class="card"><div class="card-header">${Icons.svg(this.healthIcons[name] || 'heart')} ${name}</div>
+          <div class="health-row"><span class="health-status" style="color:${status.color};">${status.label}</span></div>
+          <div class="health-bar"><div class="health-fill" style="width:${val}%;background:${status.color};"></div></div></div>`;
+      }).join('')}</div></div>`;
   },
 
   renderLogs(c) {
-    c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('logs')} Logs</div><div class="log-panel" style="height:500px;">${this.renderLogEntries(this.store.logs)}</div></div>`;
+    const levels = [['all', 'Todos'], ['info', 'Info'], ['warn', 'Warn'], ['error', 'Error'], ['debug', 'Debug']];
+    c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('logs')} Logs</div>
+      <div class="filter-chips">${levels.map(([key, label]) => `<span class="filter-chip ${key === 'all' ? 'active' : ''}" data-level="${key}">${label}</span>`).join('')}</div>
+      <div class="log-panel" id="logsPanel" style="height:460px;">${this.renderLogEntries(this.store.logs)}</div></div>`;
+    c.querySelectorAll('.filter-chip').forEach(chip => {
+      chip.onclick = () => {
+        c.querySelectorAll('.filter-chip').forEach(ch => ch.classList.remove('active'));
+        chip.classList.add('active');
+        const level = chip.dataset.level;
+        const filtered = level === 'all' ? this.store.logs : this.store.logs.filter(l => (l.level || 'info') === level);
+        document.getElementById('logsPanel').innerHTML = this.renderLogEntries(filtered);
+      };
+    });
   },
 
   renderLogEntries(logs) {
-    return (logs || []).map(l => `<div class="log-entry"><span class="log-level log-level-${l.level || 'info'}">${(l.level || 'info').toUpperCase()}</span> [${new Date(l.time).toLocaleTimeString()}] ${l.msg}</div>`).join('') || '<p style="color:var(--muted);">Sin actividad</p>';
+    return (logs || []).map(l => `<div class="log-entry"><span class="log-level log-level-${l.level || 'info'}">${(l.level || 'info').toUpperCase()}</span> [${new Date(l.time).toLocaleTimeString()}] ${l.msg}</div>`).join('') || `<div class="empty-state">${Icons.svg('logs', 26)}<span>Sin actividad</span></div>`;
   },
 
   /** Activa el fade-in + slide-up de tarjetas visibles (IntersectionObserver). */
@@ -378,7 +553,7 @@ const App = {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => { if (entry.isIntersecting) { entry.target.classList.add('is-visible'); observer.unobserve(entry.target); } });
     }, { threshold: 0.1 });
-    cards.forEach(card => { card.classList.add('reveal'); observer.observe(card); });
+    cards.forEach((card, i) => { card.classList.add('reveal'); card.style.transitionDelay = `${Math.min(i, 8) * 40}ms`; observer.observe(card); });
   },
 
   /* ------------------------------ Chart histórico ------------------------------ */
@@ -387,17 +562,27 @@ const App = {
     if (!ctx) return;
     if (this.chart) this.chart.destroy();
     const hist = this.store.history.length ? this.store.history : [{ t: Date.now(), opportunities: this.store.opportunities.length, clients: this.store.clients.length, apps: this.store.apps.length }];
+    const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+    const gridColor = isLight ? 'rgba(11,18,32,0.08)' : 'rgba(255,255,255,0.06)';
+    const tickColor = isLight ? '#3c4357' : '#b6bacb';
     this.chart = new Chart(ctx, {
       type: 'line',
       data: {
         labels: hist.map(h => new Date(h.t).toLocaleTimeString()),
         datasets: [
-          { label: 'Oportunidades', data: hist.map(h => h.opportunities), borderColor: '#4df0ff', backgroundColor: 'rgba(77,240,255,0.08)', tension: 0.4, fill: true },
-          { label: 'Clientes', data: hist.map(h => h.clients), borderColor: '#e8c97a', backgroundColor: 'rgba(232,201,122,0.08)', tension: 0.4, fill: true },
-          { label: 'Apps', data: hist.map(h => h.apps), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.08)', tension: 0.4, fill: true }
+          { label: 'Oportunidades', data: hist.map(h => h.opportunities), borderColor: '#4df0ff', backgroundColor: 'rgba(77,240,255,0.08)', pointBackgroundColor: '#4df0ff', tension: 0.4, fill: true },
+          { label: 'Clientes', data: hist.map(h => h.clients), borderColor: '#e8c97a', backgroundColor: 'rgba(232,201,122,0.08)', pointBackgroundColor: '#e8c97a', tension: 0.4, fill: true },
+          { label: 'Apps', data: hist.map(h => h.apps), borderColor: '#34d399', backgroundColor: 'rgba(52,211,153,0.08)', pointBackgroundColor: '#34d399', tension: 0.4, fill: true }
         ]
       },
-      options: { responsive: true, maintainAspectRatio: false }
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: tickColor, font: { size: 11 } } } },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } },
+          y: { grid: { color: gridColor }, ticks: { color: tickColor, font: { size: 10 } } }
+        }
+      }
     });
   },
 
@@ -408,21 +593,26 @@ const App = {
     const rows = this.store.projects.map(p => {
       let data = { opps: [], clients: [], apps: [] };
       try { data = JSON.parse(localStorage.getItem(`axiom_data_${p.id}`) || '{}'); } catch {}
-      return `<tr><td>${p.name}</td><td>${(data.opps || []).length}</td><td>${(data.clients || []).length}</td><td>${(data.apps || []).length}</td></tr>`;
+      const active = p.id === this.store.activeProjectId;
+      return `<tr class="${active ? 'active-row' : ''}"><td>${p.name}</td><td>${(data.opps || []).length}</td><td>${(data.clients || []).length}</td><td>${(data.apps || []).length}</td></tr>`;
     }).join('');
-    area.innerHTML = `<table style="width:100%;margin-top:8px;font-size:0.65rem;color:var(--dim);"><tr><th>Proyecto</th><th>Oport</th><th>Clientes</th><th>Apps</th></tr>${rows}</table>`;
+    area.innerHTML = `<table class="compare-table"><tr><th>Proyecto</th><th>Oport</th><th>Clientes</th><th>Apps</th></tr>${rows}</table>`;
   },
 
   /* ------------------------------ Acciones UI ------------------------------ */
   preview(id) {
     const app = this.store.apps.find(a => a.id === id);
-    if (app) document.getElementById('previewArea').innerHTML = `<iframe srcdoc="${(app.code || '').replace(/"/g, '&quot;')}" style="width:100%;height:100%;border:none;"></iframe>`;
+    if (!app) return;
+    document.getElementById('previewArea').innerHTML = `<iframe srcdoc="${(app.code || '').replace(/"/g, '&quot;')}" style="width:100%;height:100%;border:none;"></iframe>`;
+    const urlEl = document.getElementById('previewUrl');
+    if (urlEl) urlEl.textContent = `kryon-demo.app/${this.slugify(app.name)}`;
   },
 
   saveCode() {
     const code = document.getElementById('codeEditor')?.value || '';
     if (this.store.apps[0]) { this.store.apps[0].code = code; this.saveLocal(); }
     else { this.store.apps.unshift({ id: 'a_' + Date.now(), name: 'App', code, status: 'completed' }); this.saveLocal(); }
+    this.refreshEditorPreview();
     this.toast('Guardado');
   },
 
@@ -433,24 +623,24 @@ const App = {
 
   toast(msg) {
     const t = document.createElement('div');
-    t.style.cssText = 'position:fixed;top:16px;right:16px;background:rgba(8,14,30,0.95);border:1px solid #4df0ff;padding:8px 16px;border-radius:20px;z-index:200;font-size:0.7rem;color:#fff;';
-    t.textContent = msg;
+    t.className = 'toast';
+    t.innerHTML = `${Icons.svg('check', 14)}<span>${msg}</span>`;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 2500);
+    setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 300); }, 2500);
   },
 
   async autoScan() {
     const opp = this.pipeline.autoScan();
     if (this.cloud.connected) await this.cloud.insert('opportunities', opp);
     this.saveLocal();
-    this.render();
+    if (this.currentTab === 'dashboard') this.render();
   },
 
   async autoFindClients() {
     const client = this.pipeline.autoFindClients();
     if (this.cloud.connected) await this.cloud.insert('clients', client);
     this.saveLocal();
-    this.render();
+    if (['dashboard', 'pipeline', 'clients'].includes(this.currentTab)) this.render();
   },
 
   autoBackup() {
@@ -467,7 +657,7 @@ const App = {
     (this.refreshFromCloud ? this.refreshFromCloud() : Promise.resolve(this.loadLocal())).then(() => {
       this.agentsManager.load(this.store.activeProjectId);
       this.renderShell();
-      this.render();
+      this.render(true);
     });
   },
 
@@ -480,22 +670,36 @@ const App = {
     if (this.cloud.connected) this.cloud.insert('projects', { id, name, created_at: new Date().toISOString() });
     this.saveLocal();
     this.renderShell();
-    this.render();
+    this.render(true);
   },
 
   showConfigModal() {
     const url = localStorage.getItem('axiom_supabase_url') || '';
     const key = localStorage.getItem('axiom_supabase_key') || '';
+    const backendUrl = localStorage.getItem('axiom_backend_url') || '';
     const content = `<h3>${Icons.svg('settings', 16)} Configuración Cloud</h3>
-      <p style="font-size:0.6rem;color:var(--dim);">1. Crea cuenta en supabase.com<br>2. Ve a Settings > API<br>3. Copia URL y anon key</p>
-      <input id="cfg_url" value="${url}" placeholder="https://...supabase.co" style="width:100%;margin-top:8px;background:rgba(0,0,0,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;color:#fff;">
-      <input id="cfg_key" value="${key}" placeholder="eyJhbGciOi..." style="width:100%;margin-top:8px;background:rgba(0,0,0,0.5);border:1px solid var(--border);border-radius:8px;padding:8px;color:#fff;">
-      <button class="pill-btn primary" onclick="CloudDB.setCredentials(document.getElementById('cfg_url').value,document.getElementById('cfg_key').value);alert('Guardado. Recarga la página.');location.reload();" style="margin-top:8px;">${Icons.svg('check', 12)} Guardar y reconectar</button>`;
+      <p>1. Crea cuenta en supabase.com<br>2. Ve a Settings &gt; API<br>3. Copia URL y anon key</p>
+      <input id="cfg_url" value="${url}" placeholder="https://...supabase.co">
+      <input id="cfg_key" value="${key}" placeholder="eyJhbGciOi...">
+      <button class="pill-btn primary" onclick="CloudDB.setCredentials(document.getElementById('cfg_url').value,document.getElementById('cfg_key').value);alert('Guardado. Recarga la página.');location.reload();">${Icons.svg('check', 12)} Guardar y reconectar</button>
+      <hr style="margin:14px 0;border-color:var(--border);">
+      <h3>${Icons.svg('settings', 16)} Backend (opcional)</h3>
+      <p>URL de tu backend desplegado (Vercel, etc.). Activa la generación real de demos con Claude, la verificación en vivo de Resend/Anthropic y las notificaciones push.</p>
+      <input id="cfg_backend_url" value="${backendUrl}" placeholder="https://tu-backend.vercel.app">
+      <button class="pill-btn primary" onclick="App.saveBackendUrl()">${Icons.svg('check', 12)} Guardar backend</button>`;
     const modal = document.createElement('div');
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;display:flex;align-items:center;justify-content:center;';
-    modal.innerHTML = `<div style="background:rgba(8,14,30,0.95);border:1px solid rgba(77,240,255,0.4);border-radius:18px;padding:24px;width:90%;max-width:500px;">${content}<button class="pill-btn" onclick="this.closest('div').parentElement.remove()" style="margin-top:8px;">Cerrar</button></div>`;
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-card">${content}<button class="pill-btn" onclick="this.closest('.modal-overlay').remove()" style="margin-top:8px;">Cerrar</button></div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  },
+
+  saveBackendUrl() {
+    const input = document.getElementById('cfg_backend_url');
+    const val = (input.value || '').trim().replace(/\/$/, '');
+    localStorage.setItem('axiom_backend_url', val);
+    alert('Guardado. Recarga la página.');
+    location.reload();
   },
 
   async contactClient(id) {
@@ -553,7 +757,7 @@ const App = {
 
   toggleAuto() {
     this.autoMode = !this.autoMode;
-    document.getElementById('autoBtn').innerHTML = `${Icons.svg('activity', 13)} Auto: ${this.autoMode ? 'ON' : 'OFF'}`;
+    document.getElementById('autoBtn').innerHTML = `${this.autoMode ? '<span class="live-dot"></span>' : Icons.svg('activity', 13)} Auto: ${this.autoMode ? 'ON' : 'OFF'}`;
     if (this.autoMode) this.runAuto();
   },
 
@@ -629,4 +833,6 @@ document.addEventListener('DOMContentLoaded', () => App.init());
   g.App = App;
   g.Icons = Icons;
   g.debounce = debounce;
+  g.initials = initials;
+  g.contrastColor = contrastColor;
 })(typeof window !== 'undefined' ? window : globalThis);
