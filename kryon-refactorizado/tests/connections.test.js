@@ -49,8 +49,13 @@ describe('ConnectionsManager', () => {
     expect(mgr.supportsLiveTest('supabase')).toBe(true);
     expect(mgr.supportsLiveTest('resend')).toBe(true);
     expect(mgr.supportsLiveTest('anthropic')).toBe(true);
-    expect(mgr.supportsLiveTest('stripe')).toBe(false);
-    expect(mgr.supportsLiveTest('meta')).toBe(false);
+    expect(mgr.supportsLiveTest('stripe')).toBe(true);
+    expect(mgr.supportsLiveTest('meta')).toBe(true);
+    expect(mgr.supportsLiveTest('tiktok')).toBe(true);
+    expect(mgr.supportsLiveTest('linkedin')).toBe(true);
+    expect(mgr.supportsLiveTest('x')).toBe(true);
+    expect(mgr.supportsLiveTest('google_ads')).toBe(false);
+    expect(mgr.supportsLiveTest('ga4')).toBe(false);
   });
 
   it('returns the stored key value via getKey', () => {
