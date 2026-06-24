@@ -1471,6 +1471,25 @@ const App = {
     this.autoCreatePaymentLink(c);
   },
 
+  /** Si en este momento hay Resend + "Email de envío" configurados y el cliente
+   * tiene email y no está en opt-out, se le puede mandar un correo automático. */
+  canEmailClient(c) {
+    const profile = this.getProfile();
+    return !!(c.email && this.connections.getKey('resend') && profile.fromEmail) && !this.isOptedOut(c.email);
+  },
+
+  /** Pone en cola (si aún no estaba) el email del enlace de pago de un cliente que
+   * ya tiene paymentUrl. Necesario porque el enlace puede haberse creado antes de
+   * que el email estuviera configurado: sin esto, nunca se volvía a intentar. */
+  queuePaymentEmailIfNeeded(c) {
+    if (c.paymentEmailQueued || !c.paymentUrl || !this.canEmailClient(c)) return false;
+    const { subject, html } = this.buildPaymentEmail(c, c.paymentUrl);
+    this.queuePendingSend(c, subject, html, 'pago');
+    c.paymentEmailQueued = true;
+    this.saveLocal();
+    return true;
+  },
+
   /** Genera el enlace de cobro real de Stripe en cuanto el cliente queda aprobado,
    * sin esperar a que el usuario pulse "Cobrar" — solo crea el enlace, no cobra nada solo. */
   async autoCreatePaymentLink(c) {
@@ -1496,11 +1515,7 @@ const App = {
       this.saveLocal();
       if (this.cloud.connected) this.cloud.update('clients', c.id, { payment_url: data.url, payment_session_id: data.sessionId });
 
-      const profile = this.getProfile();
-      const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail) && !this.isOptedOut(c.email);
-      if (canEmail) {
-        const { subject, html } = this.buildPaymentEmail(c, data.url);
-        this.queuePendingSend(c, subject, html, 'pago');
+      if (this.queuePaymentEmailIfNeeded(c)) {
         this.render();
         this.notify('AXIOM CORE', `Enlace de pago listo para ${c.name} · esperando tu aprobación en "Agentes"`);
       } else {
@@ -1550,17 +1565,22 @@ const App = {
       this.toast('Generando enlace de pago...');
       await this.autoCreatePaymentLink(c);
       if (!c.paymentUrl) return this.toast('No se pudo crear el enlace de pago');
+    } else if (this.queuePaymentEmailIfNeeded(c)) {
+      this.render();
     }
     this.showPaymentModal(c);
   },
 
   /** Muestra el enlace de pago generado y permite verificar en vivo si Stripe ya lo cobró. */
   showPaymentModal(c) {
+    const emailMsg = c.paymentEmailQueued
+      ? 'El email con este enlace está esperando tu aprobación en la pestaña "Agentes" → cola de envíos pendientes. Aquí lo tienes también por si quieres copiarlo y enviarlo a mano:'
+      : 'No se ha enviado ningún email automático (falta configurar Resend y/o el "Email de envío" en Ajustes, o este cliente no tiene email). Copia el enlace y envíaselo tú a mano:';
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = `<div class="modal-card">
       <h3>${Icons.svg('euro', 16)} Cobro a ${c.name}</h3>
-      <p>El email con este enlace está esperando tu aprobación en la pestaña "Agentes" → cola de envíos pendientes. Aquí lo tienes también por si quieres copiarlo y enviarlo a mano:</p>
+      <p>${emailMsg}</p>
       <input id="paymentUrlInput" value="${c.paymentUrl}" readonly>
       <div style="display:flex;gap:8px;margin-top:10px;">
         <button class="pill-btn" id="copyPaymentBtn">${Icons.svg('check', 12)} Copiar enlace</button>
