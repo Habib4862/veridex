@@ -395,7 +395,12 @@ const App = {
    * sirve index.html para cualquier ruta). Se inyecta un guardia que bloquea toda
    * navegación de enlaces/formularios dentro de la vista previa, sin tocar el resto del HTML. */
   safePreviewHtml(code = '') {
-    const guard = '<script>document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a");if(a)e.preventDefault();},true);document.addEventListener("submit",function(e){e.preventDefault();},true);</' + 'script>';
+    const guard = '<script>'
+      + 'document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a");if(a)e.preventDefault();},true);'
+      + 'document.addEventListener("submit",function(e){e.preventDefault();},true);'
+      + 'window.open=function(){return null;};'
+      + 'if(window.HTMLFormElement)HTMLFormElement.prototype.submit=function(){};'
+      + '</' + 'script>';
     return /<\/body>/i.test(code) ? code.replace(/<\/body>/i, guard + '</body>') : code + guard;
   },
 
