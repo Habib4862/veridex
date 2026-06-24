@@ -15,6 +15,12 @@
  *   lo confirme en ese camino.
  * - Pagos: al aprobar un cliente se genera solo el enlace de Stripe, y un
  *   ciclo periódico comprueba si ya se pagó para acreditarlo sin clic manual.
+ * - Agentes IA (Developer): si el usuario los activa en el panel "Agentes",
+ *   un ciclo periódico genera con Claude la demo real de cada cliente en
+ *   etapa "contactado" sin demo todavía, y deja el email de entrega en una
+ *   cola de aprobación por lotes — nunca lo envía solo. El usuario revisa la
+ *   cola y aprueba (todo de golpe o uno a uno) antes de que salga cualquier
+ *   email real.
  * Ninguna de estas automatizaciones sigue funcionando con el navegador
  * cerrado: no hay claves guardadas en el servidor, solo en este dispositivo.
  */
@@ -91,6 +97,7 @@ const App = {
   store: {
     projects: [], activeProjectId: null,
     opportunities: [], clients: [], apps: [], logs: [], history: [], watchlist: [], optOuts: [], marketScans: [],
+    pendingSends: [], agentsEnabled: false,
     portfolio: { total: 0, cash: 0 }
   },
   chart: null, intervals: [], startTime: Date.now(),
@@ -148,6 +155,8 @@ const App = {
     this.loadWatchlist();
     this.loadOptOuts();
     this.loadMarketScans();
+    this.loadPendingSends();
+    this.loadAgentsEnabled();
     this.renderShell();
     this.render(true);
     this.startCycles();
@@ -213,7 +222,9 @@ const App = {
     this.intervals.push(setInterval(() => this.autoBackup(), 300000));
     this.intervals.push(setInterval(() => this.autoCheckPayments(), 120000));
     this.intervals.push(setInterval(() => this.runWatchlist(), 300000));
+    this.intervals.push(setInterval(() => this.runAgentCycle(), 180000));
     this.runWatchlist();
+    this.runAgentCycle();
   },
 
   clearIntervals() { this.intervals.forEach(clearInterval); this.intervals = []; },
@@ -246,6 +257,119 @@ const App = {
   removeWatch(id) {
     this.store.watchlist = (this.store.watchlist || []).filter(w => w.id !== id);
     this.saveWatchlist();
+    this.render();
+  },
+
+  /* ----------------------- Agentes IA autónomos (Developer) ----------------------- */
+
+  loadPendingSends() {
+    try { this.store.pendingSends = JSON.parse(localStorage.getItem(`axiom_pendingsends_${this.store.activeProjectId}`) || '[]'); }
+    catch { this.store.pendingSends = []; }
+  },
+
+  savePendingSends() {
+    localStorage.setItem(`axiom_pendingsends_${this.store.activeProjectId}`, JSON.stringify(this.store.pendingSends || []));
+  },
+
+  loadAgentsEnabled() {
+    this.store.agentsEnabled = localStorage.getItem(`axiom_agents_enabled_${this.store.activeProjectId}`) === '1';
+  },
+
+  /** El usuario decide explícitamente cuándo dejar trabajar a los agentes solos:
+   * por defecto están apagados (generar demos gasta tu clave real de Anthropic),
+   * y activarlos no envía nada por sí solo, solo deja la demo lista en la cola. */
+  toggleAgents() {
+    this.store.agentsEnabled = !this.store.agentsEnabled;
+    localStorage.setItem(`axiom_agents_enabled_${this.store.activeProjectId}`, this.store.agentsEnabled ? '1' : '0');
+    this.toast(this.store.agentsEnabled ? 'Agentes IA activados' : 'Agentes IA detenidos');
+    this.render();
+    if (this.store.agentsEnabled) this.runAgentCycle();
+  },
+
+  /** Ronda autónoma del agente Developer: genera con Claude la demo real de cada
+   * cliente en etapa "contactado" que todavía no tiene una, y deja el email de
+   * entrega en la cola de aprobación — nunca lo envía por su cuenta. Solo corre
+   * si el usuario activó "Agentes IA" y solo mientras esta pestaña esté abierta
+   * (no hay backend con cron: si se cierra el navegador, el ciclo se detiene). */
+  async runAgentCycle() {
+    if (!this.store.agentsEnabled) return;
+    const anthropicKey = this.connections.getKey('anthropic');
+    if (!anthropicKey) return;
+    const candidates = (this.store.clients || []).filter(c => c.stage === 'contactado' && !c.demoId);
+    const batch = candidates.slice(0, 3);
+    if (!batch.length) return;
+    let generated = 0;
+    for (const c of batch) {
+      try {
+        const code = await this.claude.generateAppCode(c, anthropicKey);
+        const result = this.pipeline.sendDemo(c.id, code);
+        if (!result) continue;
+        const { app } = result;
+        generated++;
+        if (this.cloud.connected) { await this.cloud.insert('apps', app); await this.cloud.update('clients', c.id, { stage: 'demo_enviada', demo_id: app.id }); }
+        const profile = this.getProfile();
+        const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail) && !this.isOptedOut(c.email);
+        if (canEmail) {
+          const sender = profile.senderName || profile.businessName || 'nuestro equipo';
+          const subject = `${profile.businessName || sender}: tu demo está lista`;
+          this.queuePendingSend(c, subject, code);
+        }
+      } catch { /* un fallo generando la demo de un cliente no debe parar al resto del lote */ }
+    }
+    if (generated) {
+      this.saveLocal();
+      this.render();
+      this.notify('AXIOM CORE', `Agentes IA: ${generated} demo(s) nueva(s) generada(s)${this.store.pendingSends?.length ? ` · ${this.store.pendingSends.length} esperando tu aprobación` : ''}`);
+    }
+  },
+
+  queuePendingSend(c, subject, html) {
+    this.store.pendingSends = this.store.pendingSends || [];
+    this.store.pendingSends.push({ id: 'p_' + Date.now() + Math.random(), clientId: c.id, clientName: c.name, subject, html, createdAt: Date.now() });
+    this.savePendingSends();
+  },
+
+  togglePendingPreview(id) {
+    const el = document.getElementById(`pending_preview_${id}`);
+    const item = (this.store.pendingSends || []).find(p => p.id === id);
+    if (!el || !item) return;
+    const show = el.style.display === 'none' || !el.style.display;
+    if (show && !el.dataset.loaded) { el.srcdoc = item.html; el.dataset.loaded = '1'; }
+    el.style.display = show ? 'block' : 'none';
+  },
+
+  /** Envía de verdad por Resend la demo en cola tras tu aprobación explícita. */
+  async approvePendingSend(id) {
+    const item = (this.store.pendingSends || []).find(p => p.id === id);
+    if (!item) return;
+    const c = this.store.clients.find(x => x.id === item.clientId);
+    if (!c) { this.discardPendingSend(id); return; }
+    const sent = await this.sendOutreachEmail(c, item.subject, item.html);
+    this.store.pendingSends = this.store.pendingSends.filter(p => p.id !== id);
+    this.savePendingSends();
+    this.toast(sent ? `Demo enviada por email a ${c.name}` : `No se pudo enviar a ${c.name} (revisa Resend/Email de envío)`);
+    this.render();
+  },
+
+  /** Aprueba y envía toda la cola de una vez (un solo clic), pero sigue siendo
+   * una aprobación explícita: nunca se llama sola desde el ciclo automático. */
+  async approveAllPendingSends() {
+    const items = [...(this.store.pendingSends || [])];
+    if (!items.length) return;
+    let ok = 0;
+    for (const item of items) {
+      const c = this.store.clients.find(x => x.id === item.clientId);
+      if (c) { if (await this.sendOutreachEmail(c, item.subject, item.html)) ok++; }
+      this.store.pendingSends = this.store.pendingSends.filter(p => p.id !== item.id);
+    }
+    this.savePendingSends();
+    this.toast(`${ok}/${items.length} demo(s) enviada(s) por email`);
+    this.render();
+  },
+
+  discardPendingSend(id) {
+    this.store.pendingSends = (this.store.pendingSends || []).filter(p => p.id !== id);
+    this.savePendingSends();
     this.render();
   },
 
@@ -553,6 +677,8 @@ const App = {
   },
 
   renderAgents(c) {
+    const pending = this.store.pendingSends || [];
+    const enabled = !!this.store.agentsEnabled;
     c.innerHTML = `<div class="grid grid-3">${this.agentsManager.agents.map(a => {
       const operational = this.agentsManager.isOperational(a.id, this.connections);
       return `<div class="card">
@@ -560,7 +686,32 @@ const App = {
           <span class="connection-dot ${operational ? 'on' : 'off'}"></span> <span style="font-size:0.55rem;color:var(--dim);">${operational ? 'Operativo' : 'Falta conectar ' + (CONNECTIONS_REGISTRY.find(x => x.id === a.requires)?.name || a.requires)}</span></div></div>
         <div style="font-size:0.6rem;color:var(--dim);margin-top:6px;">${a.role}</div>
       </div>`;
-    }).join('')}</div>`;
+    }).join('')}</div>
+    <div class="card" style="margin-top:14px;">
+      <div class="card-header"><span>${Icons.svg('cpu')} Ronda automática (Developer)</span>
+        <button class="pill-btn ${enabled ? 'primary' : ''}" onclick="App.toggleAgents()">${Icons.svg(enabled ? 'check' : 'sparkles', 12)} ${enabled ? 'Activos' : 'Activar agentes IA'}</button>
+      </div>
+      <div style="font-size:0.6rem;color:var(--dim);">${enabled
+        ? 'Cada pocos minutos, mientras esta pestaña esté abierta: genera con Claude la demo real de cada cliente ya contactado que aún no tiene una, y deja el email de entrega en la cola de abajo para que lo apruebes (no envía nada por su cuenta). No hay ejecución en segundo plano: si cierras la pestaña, se detiene.'
+        : 'Desactivados. Al activarlos, gastarán tu clave real de Anthropic para generar demos automáticamente de clientes en etapa "contactado", dejándolas en la cola de abajo para tu aprobación antes de enviarlas.'}</div>
+    </div>
+    <div class="card" style="margin-top:14px;">
+      <div class="card-header"><span>${Icons.svg('mail')} Cola de envíos pendientes (${pending.length})</span>
+        ${pending.length ? `<button class="pill-btn primary" onclick="App.approveAllPendingSends()">${Icons.svg('check', 12)} Aprobar todo y enviar</button>` : ''}
+      </div>
+      ${!pending.length ? `<div class="empty-state">${Icons.svg('mail', 20)}<span>No hay demos generadas por agentes esperando tu aprobación</span></div>` : pending.map(p => `
+        <div class="node-item" style="flex-direction:column;align-items:stretch;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div><strong>${p.clientName}</strong><div style="font-size:0.55rem;color:var(--dim);">${p.subject}</div></div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="pill-btn" onclick="App.togglePendingPreview('${p.id}')">${Icons.svg('flask', 12)} Vista previa</button>
+              <button class="pill-btn primary" onclick="App.approvePendingSend('${p.id}')">${Icons.svg('check', 12)} Enviar</button>
+              <button class="pill-btn" onclick="App.discardPendingSend('${p.id}')">${Icons.svg('x', 12)} Descartar</button>
+            </div>
+          </div>
+          <iframe id="pending_preview_${p.id}" sandbox="" style="width:100%;height:200px;border:none;background:#fff;display:none;margin-top:8px;"></iframe>
+        </div>`).join('')}
+    </div>`;
   },
 
   connectionCategories: {
