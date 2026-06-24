@@ -93,22 +93,35 @@ class ClaudeService {
       ? `Datos reales y verificados de la empresa (úsalos exactamente como aparecen, no inventes otros):\n${knownFacts}\n`
       : 'No hay datos de contacto verificados todavía: no inventes dirección, teléfono ni web concretos; usa solo un formulario de contacto o un texto genérico tipo "Contáctanos".\n';
     const automationBlock = client.need === 'Expandir' ? `${AUTOMATION_EXTRA}\n` : '';
-    const rawPrompt = `Eres un diseñador y desarrollador senior especializado en crear entregables
-      digitales de la máxima calidad posible. Crea ${brief} para ${client.name}, una empresa del
-      sector ${client.sector}.
+    const rawPrompt = `Eres un diseñador y desarrollador senior de una agencia de primer nivel (nivel
+      Awwwards / Stripe / Linear), no una herramienta de plantillas genéricas. Tu listón es: si esto
+      no parecería digno de portfolio de una agencia premium, no es suficiente. Crea ${brief}
+      para ${client.name}, una empresa del sector ${client.sector}.
       ${factsBlock}
       ${automationBlock}
-      Requisitos: una sola página HTML autocontenida con CSS embebido en <style> (sin
-      dependencias ni librerías externas), diseño moderno y responsive, tipografía y
-      espaciado cuidados, jerarquía visual clara y transiciones/hover sutiles en CSS
-      donde aporten. No uses URLs de imágenes externas ni placeholders rotos: si
-      quieres elementos visuales, créalos con CSS/SVG inline (gradientes, formas,
-      iconos simples). Contenido específico y realista para ese sector y necesidad
-      (nada de texto genérico tipo "Lorem ipsum"). Incluye cabecera con el nombre de
-      la empresa y una propuesta de valor clara, y usa los datos reales de contacto
-      indicados arriba si existen. Este entregable es lo primero que verá el cliente
-      potencial, así que debe causar la mejor impresión profesional posible y
-      ajustarse exactamente al tipo de necesidad descrito arriba.
+      Requisitos de diseño (nivel premium, no plantilla genérica):
+      - Paleta de color con personalidad y coherente con el sector (nada de azul corporativo
+        por defecto salvo que tenga sentido); contraste de texto correcto (legible de verdad).
+      - Tipografía cuidada con jerarquía clara entre títulos/cuerpo: usa una pila de fuentes de
+        sistema de calidad (-apple-system, 'Segoe UI', Inter, Roboto, sans-serif) o, si aporta
+        personalidad, importa UNA fuente real de Google Fonts vía @import en el <style> (es un
+        recurso real y estable, con buena degradación si no carga — no lo cuentes como
+        "dependencia externa rota").
+      - Espaciado generoso, ritmo vertical consistente, layout con capas/profundidad sutil
+        (sombras suaves, bordes redondeados consistentes, alguna sección con grid asimétrico
+        si aporta), transiciones/hover con buen gusto, sin exagerar.
+      - HTML semántico (header, main, section, footer) y accesible.
+      Requisitos técnicos: una sola página HTML autocontenida con CSS embebido en <style> (sin
+      librerías externas vía <script>), diseño responsive de verdad (se ve bien en móvil y
+      escritorio). No uses URLs de imágenes externas ni placeholders rotos: si quieres
+      elementos visuales, créalos con CSS/SVG inline (gradientes, formas, iconos simples).
+      Contenido específico y realista para ese sector y necesidad (nada de texto genérico tipo
+      "Lorem ipsum" ni frases vacías de relleno). Incluye cabecera con el nombre de la empresa
+      y una propuesta de valor clara y específica de ese negocio, y usa los datos reales de
+      contacto indicados arriba si existen. Este entregable es lo primero que verá el cliente
+      potencial, así que debe causar la mejor impresión profesional posible y ajustarse
+      exactamente al tipo de necesidad descrito arriba. No entregues una versión mínima
+      aceptable: dale el nivel de acabado de un proyecto real cobrado a precio premium.
       Devuelve únicamente el HTML, sin explicaciones.`;
     const prompt = this.compressPrompt(rawPrompt);
     const cacheKey = `${anthropicKey}|${prompt}`;
