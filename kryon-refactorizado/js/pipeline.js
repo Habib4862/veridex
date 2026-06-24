@@ -51,6 +51,7 @@ class PipelineManager {
       address: lead.address || '',
       phone: lead.phone || '',
       website: lead.website || '',
+      email: lead.email || '',
       placeId: lead.placeId || '',
       sector,
       need,
@@ -68,6 +69,7 @@ class PipelineManager {
       address: opp.address || '',
       phone: opp.phone || '',
       website: opp.website || '',
+      email: opp.email || '',
       budget: PipelineManager.estimateBudget(opp.need, opp.sector),
       stage: 'nuevo',
       project_id: this.store.activeProjectId

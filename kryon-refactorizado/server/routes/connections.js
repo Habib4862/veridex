@@ -5,7 +5,7 @@
  * no la persiste en ningún sitio.
  *
  * Nota de honestidad: Resend, Anthropic, Stripe, Meta, TikTok, LinkedIn, X,
- * GA4 y Google Places se verifican aquí porque sus APIs bloquean llamadas
+ * GA4, Google Places y Hunter.io se verifican aquí porque sus APIs bloquean llamadas
  * directas desde el navegador (CORS), o (en el caso de GA4) requieren un
  * intercambio OAuth2 de cuenta de servicio que no puede hacerse desde el
  * navegador. Supabase se verifica directamente desde el frontend (su API
@@ -110,6 +110,14 @@ router.post('/test', async (req, res) => {
       }
       if (!r.ok) return res.json({ ok: false, error: data.error?.message || `Google Places respondió ${r.status}` });
       return res.json({ ok: true, detail: 'acceso confirmado a la API de Google Places' });
+    }
+
+    if (service === 'hunter') {
+      const r = await fetch(`https://api.hunter.io/v2/account?api_key=${encodeURIComponent(key)}`);
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 401 || r.status === 403) return res.json({ ok: false, error: 'Clave inválida' });
+      if (!r.ok) return res.json({ ok: false, error: data.errors?.[0]?.details || `Hunter.io respondió ${r.status}` });
+      return res.json({ ok: true, detail: 'acceso confirmado a la API de Hunter.io' });
     }
 
     if (service === 'ga4') {

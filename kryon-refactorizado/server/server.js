@@ -21,6 +21,8 @@ const pushRoute = require('./routes/push');
 const connectionsRoute = require('./routes/connections');
 const stripeRoute = require('./routes/stripe');
 const leadsRoute = require('./routes/leads');
+const emailsRoute = require('./routes/emails');
+const resendRoute = require('./routes/resend');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,6 +45,8 @@ app.use('/api/push', pushRoute);
 app.use('/api/connections', connectionsRoute);
 app.use('/api/stripe', stripeRoute);
 app.use('/api/leads', leadsRoute);
+app.use('/api/emails', emailsRoute);
+app.use('/api/resend', resendRoute);
 
 app.use((req, res) => res.status(404).json({ error: 'No encontrado' }));
 
