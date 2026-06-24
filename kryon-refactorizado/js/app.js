@@ -90,7 +90,7 @@ const App = {
   currentTab: 'dashboard',
   store: {
     projects: [], activeProjectId: null,
-    opportunities: [], clients: [], apps: [], logs: [], history: [], watchlist: [],
+    opportunities: [], clients: [], apps: [], logs: [], history: [], watchlist: [], optOuts: [],
     portfolio: { total: 0, cash: 0 }
   },
   chart: null, intervals: [], startTime: Date.now(),
@@ -146,6 +146,7 @@ const App = {
 
   afterLoad() {
     this.loadWatchlist();
+    this.loadOptOuts();
     this.renderShell();
     this.render(true);
     this.startCycles();
@@ -244,6 +245,42 @@ const App = {
   removeWatch(id) {
     this.store.watchlist = (this.store.watchlist || []).filter(w => w.id !== id);
     this.saveWatchlist();
+    this.render();
+  },
+
+  /* --------------------- Bajas reales (Legal: derecho a no ser contactado) --------------------- */
+
+  /** El agente Legal exige que todo email de primer contacto ofrezca darse de
+   * baja. Esta lista hace que esa oferta sea real: un negocio que pide no ser
+   * contactado de nuevo (mail.markOptOut) queda excluido para siempre de
+   * cualquier futuro contacto automático o manual, aunque vuelva a aparecer
+   * en una búsqueda posterior de Google Places. */
+  loadOptOuts() {
+    try { this.store.optOuts = JSON.parse(localStorage.getItem(`axiom_optouts_${this.store.activeProjectId}`) || '[]'); }
+    catch { this.store.optOuts = []; }
+  },
+
+  saveOptOuts() {
+    localStorage.setItem(`axiom_optouts_${this.store.activeProjectId}`, JSON.stringify(this.store.optOuts || []));
+  },
+
+  isOptedOut(email) {
+    if (!email) return false;
+    return (this.store.optOuts || []).includes(email.toLowerCase());
+  },
+
+  markOptOut(kind, id) {
+    const list = kind === 'client' ? this.store.clients : this.store.opportunities;
+    const item = list.find(x => x.id === id);
+    if (!item?.email) return;
+    const email = item.email.toLowerCase();
+    this.store.optOuts = this.store.optOuts || [];
+    if (!this.store.optOuts.includes(email)) this.store.optOuts.push(email);
+    item.optOut = true;
+    this.saveOptOuts();
+    this.saveLocal();
+    if (this.cloud.connected) this.cloud.update(kind === 'client' ? 'clients' : 'opportunities', id, { optOut: true });
+    this.toast(`${item.name} no volverá a ser contactado`);
     this.render();
   },
 
@@ -414,6 +451,7 @@ const App = {
       <div class="node-list">${this.store.opportunities.map(o => `
         <div class="node-item"><div class="avatar-circle">${this.initials(o.name)}</div>
           <div style="flex:1;"><strong>${o.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${o.address || o.sector}${o.phone ? ' · ' + o.phone : ''}${o.email ? ' · ' + o.email : ''}</div></div>
+          ${o.optOut ? `<span class="pipeline-stage" style="color:var(--dim);">NO CONTACTAR</span>` : (o.email ? `<button class="pill-btn" title="Marcar como 'no contactar de nuevo'" onclick="App.markOptOut('opportunity','${o.id}')">${Icons.svg('x', 12)}</button>` : '')}
           <button class="pill-btn primary" onclick="App.convertOpportunity('${o.id}')">${Icons.svg('check', 12)} Agregar al pipeline</button>
         </div>`).join('') || `<div class="empty-state">${Icons.svg('search', 28)}<span>Sin negocios detectados aún</span></div>`}
       </div></div>
@@ -422,7 +460,8 @@ const App = {
         <div class="node-item"><div class="avatar-circle">${this.initials(cl.name)}</div>
           <div style="flex:1;"><strong>${cl.name}</strong> · ${cl.sector} · €${cl.budget}${this.stageTrackHtml(cl.stage)}</div>
           <span class="pipeline-stage stage-${cl.stage}">${cl.stage.toUpperCase().replace('_', ' ')}</span>
-          ${cl.stage === 'nuevo' ? `<button class="pill-btn primary" onclick="App.contactClient('${cl.id}')">${Icons.svg('mail', 12)}</button>` : ''}
+          ${cl.optOut ? `<span class="pipeline-stage" style="color:var(--dim);">NO CONTACTAR</span>` : (cl.email ? `<button class="pill-btn" title="Marcar como 'no contactar de nuevo'" onclick="App.markOptOut('client','${cl.id}')">${Icons.svg('x', 12)}</button>` : '')}
+          ${cl.stage === 'nuevo' && !cl.optOut ? `<button class="pill-btn primary" onclick="App.contactClient('${cl.id}')">${Icons.svg('mail', 12)}</button>` : ''}
           ${cl.stage === 'contactado' ? `<button class="pill-btn primary" onclick="App.sendDemo('${cl.id}')">${Icons.svg('flask', 12)}</button>` : ''}
           ${cl.stage === 'demo_enviada' ? `<button class="pill-btn approve" onclick="App.approveClient('${cl.id}')">${Icons.svg('check', 12)}</button>` : ''}
           ${cl.stage === 'aprobado' ? `<button class="pill-btn gold" onclick="App.requestPayment('${cl.id}')">${Icons.svg('microscope', 12)}</button>` : ''}
@@ -761,6 +800,7 @@ const App = {
       const newLeads = (data.leads || []).filter(lead => !lead.placeId || !existingPlaceIds.has(lead.placeId));
       for (const lead of newLeads) {
         lead.email = await this.findEmailFor(lead);
+        if (this.isOptedOut(lead.email)) continue; // pidió no ser contactado: lo respetamos aunque vuelva a aparecer
         const opp = this.pipeline.registerOpportunity(lead, sector, need);
         if (this.cloud.connected) await this.cloud.insert('opportunities', opp);
         if (silent && opp.email) await this.autoContactOpportunity(opp);
@@ -806,17 +846,21 @@ const App = {
     const html = `<p>Hola,</p>
       <p>Soy ${sender}${profile.businessName ? ` de ${profile.businessName}` : ''}. Vi que ${c.name} podría beneficiarse de ${needLabel} y quería ponerme en contacto.</p>
       <p>¿Tendrías 15 minutos esta semana para hablarlo?</p>
-      <p>Un saludo,<br>${sender}</p>`;
+      <p>Un saludo,<br>${sender}</p>
+      <p style="font-size:11px;color:#888;margin-top:18px;">Este mensaje lo envía ${business}${profile.fromEmail ? ` (${profile.fromEmail})` : ''}. Si no quieres que volvamos a escribirte, responde indicándolo y no te contactaremos de nuevo.</p>`;
     return { subject, html };
   },
 
   /** Envía de verdad el email de primer contacto vía Resend (requiere clave de
    * Resend configurada y un "Email de envío" de dominio verificado en Resend).
+   * Respeta siempre las bajas reales: si el destinatario pidió no ser
+   * contactado de nuevo, no se envía nada aunque todo lo demás esté listo.
    * @returns {Promise<boolean>} */
   async sendOutreachEmail(c, subject, html) {
     const resendKey = this.connections.getKey('resend');
     const profile = this.getProfile();
     if (!resendKey || !profile.fromEmail || !c.email || !this.backendUrl) return false;
+    if (this.isOptedOut(c.email)) return false;
     try {
       const r = await fetch(`${this.backendUrl}/api/resend/send`, {
         method: 'POST',
@@ -836,7 +880,9 @@ const App = {
   showOutreachModal(c) {
     const { subject, html } = this.buildOutreachEmail(c);
     const profile = this.getProfile();
-    const missing = !this.connections.getKey('resend') ? 'Configura tu clave de Resend en Conexiones' : (!profile.fromEmail ? 'Configura tu "Email de envío" en Configuración (Tu negocio)' : '');
+    const missing = this.isOptedOut(c.email)
+      ? 'Este negocio pidió no ser contactado de nuevo. No se puede enviar.'
+      : (!this.connections.getKey('resend') ? 'Configura tu clave de Resend en Conexiones' : (!profile.fromEmail ? 'Configura tu "Email de envío" en Configuración (Tu negocio)' : ''));
     const modal = document.createElement('div');
     modal.className = 'modal-overlay';
     modal.innerHTML = `<div class="modal-card" style="max-width:560px;">
@@ -878,6 +924,7 @@ const App = {
     const resendKey = this.connections.getKey('resend');
     const profile = this.getProfile();
     if (!resendKey || !profile.fromEmail) return;
+    if (this.isOptedOut(opp.email)) return;
     const client = this.pipeline.convertOpportunity(opp.id);
     if (!client) return;
     this.saveLocal();
@@ -915,6 +962,7 @@ const App = {
     this.store.activeProjectId = id;
     (this.refreshFromCloud ? this.refreshFromCloud() : Promise.resolve(this.loadLocal())).then(() => {
       this.loadWatchlist();
+      this.loadOptOuts();
       this.renderShell();
       this.render(true);
     });
