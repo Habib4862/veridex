@@ -699,9 +699,14 @@ const App = {
         </div>`).join('') || `<div class="empty-state">${Icons.svg('activity', 24)}<span>Sin vigilancia activa</span></div>`}
       </div></div>
     <div class="card"><div class="card-header">${Icons.svg('target')} Negocios detectados (${this.store.opportunities.length})</div>
-      <div class="node-list">${this.store.opportunities.map(o => `
+      <div class="node-list">${[...this.store.opportunities].sort((a, b) => {
+        const aPriority = a.need === 'Web' && !a.website ? 0 : 1;
+        const bPriority = b.need === 'Web' && !b.website ? 0 : 1;
+        return aPriority - bPriority;
+      }).map(o => `
         <div class="node-item"><div class="avatar-circle">${this.initials(o.name)}</div>
           <div style="flex:1;"><strong>${o.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${o.address || o.sector}${o.phone ? ' · ' + o.phone : ''}${o.email ? ' · ' + o.email : ''}</div></div>
+          <span class="pipeline-stage" style="color:${o.website ? 'var(--dim)' : 'var(--green)'};">${o.website ? 'YA TIENE WEB' : 'SIN WEB'}</span>
           ${o.optOut ? `<span class="pipeline-stage" style="color:var(--dim);">NO CONTACTAR</span>` : (o.email ? `<button class="pill-btn" title="Marcar como 'no contactar de nuevo'" onclick="App.markOptOut('opportunity','${o.id}')">${Icons.svg('x', 12)}</button>` : '')}
           <button class="pill-btn primary" onclick="App.convertOpportunity('${o.id}')">${Icons.svg('check', 12)} Agregar al pipeline</button>
         </div>`).join('') || `<div class="empty-state">${Icons.svg('search', 28)}<span>Sin negocios detectados aún</span></div>`}
@@ -1104,12 +1109,13 @@ const App = {
    * (gratis), y si no aparece, usa Hunter.io como respaldo si hay clave configurada.
    * @returns {Promise<string|null>} */
   async findEmailFor(lead) {
-    if (!lead.website || !this.backendUrl) return null;
+    const hunterKey = this.connections.getKey('hunter') || undefined;
+    if (!this.backendUrl || (!lead.website && !hunterKey)) return null;
     try {
       const r = await fetch(`${this.backendUrl}/api/emails/find`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
-        body: JSON.stringify({ website: lead.website, hunterKey: this.connections.getKey('hunter') || undefined })
+        body: JSON.stringify({ website: lead.website || undefined, businessName: lead.name, hunterKey })
       });
       const data = await r.json();
       return data.ok ? (data.email || null) : null;

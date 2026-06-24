@@ -51,15 +51,32 @@ async function hunterEmail(website, hunterKey) {
   }
 }
 
-router.post('/find', async (req, res) => {
-  const { website, hunterKey } = req.body || {};
-  if (!website) return res.status(400).json({ ok: false, error: 'Falta website' });
+/** Respaldo para negocios sin web: Hunter.io permite buscar por nombre de
+ * empresa en vez de dominio cuando no hay sitio que rastrear. */
+async function hunterEmailByCompany(businessName, hunterKey) {
+  try {
+    const r = await fetch(`https://api.hunter.io/v2/domain-search?company=${encodeURIComponent(businessName)}&api_key=${encodeURIComponent(hunterKey)}&limit=1`);
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) return null;
+    return data.data?.emails?.[0]?.value || null;
+  } catch {
+    return null;
+  }
+}
 
-  const fromSite = await scrapeEmailFromSite(website);
-  if (fromSite) return res.json({ ok: true, email: fromSite, source: 'sitio web' });
+router.post('/find', async (req, res) => {
+  const { website, businessName, hunterKey } = req.body || {};
+  if (!website && !businessName) return res.status(400).json({ ok: false, error: 'Falta website o businessName' });
+
+  if (website) {
+    const fromSite = await scrapeEmailFromSite(website);
+    if (fromSite) return res.json({ ok: true, email: fromSite, source: 'sitio web' });
+  }
 
   if (hunterKey) {
-    const fromHunter = await hunterEmail(website, hunterKey);
+    const fromHunter = website
+      ? await hunterEmail(website, hunterKey)
+      : await hunterEmailByCompany(businessName, hunterKey);
     if (fromHunter) return res.json({ ok: true, email: fromHunter, source: 'hunter.io' });
   }
 
