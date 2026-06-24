@@ -1343,6 +1343,12 @@ const App = {
   registerServiceWorker() {
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('sw.js').catch(() => {});
+      // El SW avisa por postMessage cuando activa una versión nueva (ver
+      // sw.js activate handler) para que la app instalada (PWA escritorio/
+      // móvil) se recargue sola y no quede pegada al código viejo en caché.
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data?.type === 'KRYON_UPDATED') window.location.reload();
+      });
     }
   }
 };

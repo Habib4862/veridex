@@ -2,8 +2,14 @@
  * sw.js — Service Worker: caché offline básico (app shell) + recepción de
  * Web Push. No intercepta llamadas a Supabase/Anthropic/el backend, solo
  * los assets estáticos de la PWA.
+ *
+ * CACHE_NAME debe subir de versión en cada despliegue que toque algún
+ * archivo de ASSETS: si no, una instancia ya instalada (escritorio/móvil)
+ * sigue sirviendo el código viejo de su caché aunque Vercel ya tenga el
+ * nuevo. Al activarse una versión nueva, avisa a las pestañas abiertas para
+ * que se recarguen solas y queden al día sin que el usuario tenga que saberlo.
  */
-const CACHE_NAME = 'kryon-cache-v3';
+const CACHE_NAME = 'kryon-cache-v4';
 const ASSETS = [
   './index.html',
   './css/style.css',
@@ -33,6 +39,8 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
+      .then(() => self.clients.matchAll())
+      .then((clients) => clients.forEach((client) => client.postMessage({ type: 'KRYON_UPDATED' })))
   );
 });
 
