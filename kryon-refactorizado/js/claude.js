@@ -67,18 +67,10 @@ class ClaudeService {
     this.cache.set(key, value);
   }
 
-  /**
-   * Genera el código HTML de una demo para un cliente con la clave real de
-   * Anthropic del usuario (la misma que pegó en Conexiones). Sin esa clave
-   * no se llama a ningún backend: se devuelve un marcador de posición que
-   * dice claramente que no es la demo real, en vez de fingir una.
-   * @param {{name:string, sector:string, need?:string}} client
-   * @param {string} anthropicKey clave personal del usuario (sk-ant-...)
-   * @returns {Promise<string>} HTML de la demo
-   */
-  async generateAppCode(client, anthropicKey) {
-    if (!anthropicKey) return this._localTemplate(client);
-
+  /** Construye el prompt completo (comprimido) para un cliente concreto.
+   * Separado de generateAppCode para que regenerateAppCode pueda reutilizar
+   * exactamente la misma redacción sin duplicarla. */
+  _buildPrompt(client) {
     const brief = NEED_BRIEFS[client.need] || 'una demo de la máxima calidad posible para presentar el negocio del cliente';
     // Datos reales ya verificados (scraping de Google Places / web del negocio): si
     // existen hay que usarlos tal cual, en vez de dejar que el modelo invente otros —
@@ -87,7 +79,8 @@ class ClaudeService {
       client.address && `Dirección real: ${client.address}`,
       client.phone && `Teléfono real: ${client.phone}`,
       client.website && `Web real: ${client.website}`,
-      client.email && `Email real: ${client.email}`
+      client.email && `Email real: ${client.email}`,
+      typeof client.rating === 'number' && `Valoración real en Google: ${client.rating}★ (mencionarla solo si suma, no inventes una si no existe)`
     ].filter(Boolean).join('\n');
     const factsBlock = knownFacts
       ? `Datos reales y verificados de la empresa (úsalos exactamente como aparecen, no inventes otros):\n${knownFacts}\n`
@@ -122,12 +115,41 @@ class ClaudeService {
       potencial, así que debe causar la mejor impresión profesional posible y ajustarse
       exactamente al tipo de necesidad descrito arriba. No entregues una versión mínima
       aceptable: dale el nivel de acabado de un proyecto real cobrado a precio premium.
-      Devuelve únicamente el HTML, sin explicaciones.`;
-    const prompt = this.compressPrompt(rawPrompt);
+      IMPORTANTE: devuelve el documento HTML completo de principio a fin, cerrado con
+      </body></html>; si el contenido es extenso, prioriza terminarlo bien cerrado antes
+      que añadir secciones de más. Devuelve únicamente el HTML, sin explicaciones.`;
+    return this.compressPrompt(rawPrompt);
+  }
+
+  /**
+   * Genera el código HTML de una demo para un cliente con la clave real de
+   * Anthropic del usuario (la misma que pegó en Conexiones). Sin esa clave
+   * no se llama a ningún backend: se devuelve un marcador de posición que
+   * dice claramente que no es la demo real, en vez de fingir una.
+   * @param {{name:string, sector:string, need?:string}} client
+   * @param {string} anthropicKey clave personal del usuario (sk-ant-...)
+   * @returns {Promise<string>} HTML de la demo
+   */
+  async generateAppCode(client, anthropicKey) {
+    if (!anthropicKey) return this._localTemplate(client);
+    const prompt = this._buildPrompt(client);
     const cacheKey = `${anthropicKey}|${prompt}`;
     const cached = this._cacheGet(cacheKey);
     if (cached) return cached;
+    return this._generate(prompt, anthropicKey, client, cacheKey);
+  }
 
+  /** Igual que generateAppCode pero ignora la caché: pide una generación nueva
+   * de verdad en vez de devolver el resultado anterior, para cuando el usuario
+   * no está satisfecho y pulsa "Regenerar". Sustituye el valor cacheado. */
+  async regenerateAppCode(client, anthropicKey) {
+    if (!anthropicKey) return this._localTemplate(client);
+    const prompt = this._buildPrompt(client);
+    const cacheKey = `${anthropicKey}|${prompt}`;
+    return this._generate(prompt, anthropicKey, client, cacheKey);
+  }
+
+  async _generate(prompt, anthropicKey, client, cacheKey) {
     const task = () => this._callBackend(prompt, anthropicKey, client);
     const html = this.queue ? await this.queue.push(task, 1) : await task();
     this._cacheSet(cacheKey, html);
