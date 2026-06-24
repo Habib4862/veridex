@@ -18,7 +18,10 @@ const NEED_PRICING = {
   Ventas: { base: 3500, variance: 1500 },
   Expandir: { base: 6000, variance: 2500 }
 };
-const SECTOR_FACTOR = { Legaltech: 1.25, Salud: 1.2, Ecommerce: 1.0 };
+const SECTOR_FACTOR = {
+  Legaltech: 1.25, Salud: 1.2, Ecommerce: 1.0,
+  Restauracion: 1.0, Belleza: 0.95, Inmobiliaria: 1.15, Fitness: 1.0, Hosteleria: 1.1
+};
 /** Etiqueta del entregable según la necesidad, para que la lista de apps no
  * llame "Demo" a algo que en realidad es un sitio web o una automatización. */
 const NEED_LABELS = { Web: 'Sitio web', Ventas: 'Página de ventas', Expandir: 'Automatización' };
