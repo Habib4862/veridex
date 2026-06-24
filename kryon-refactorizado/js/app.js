@@ -1062,7 +1062,7 @@ const App = {
   async sendDemo(id) {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'contactado') return;
-    const code = await this.claude.generateAppCode(c);
+    const code = await this.claude.generateAppCode(c, this.connections.getKey('anthropic'));
     const confirmed = await this.confirmSend(c, code);
     if (!confirmed) return;
     const result = this.pipeline.sendDemo(id, code);

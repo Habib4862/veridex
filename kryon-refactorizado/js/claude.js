@@ -58,11 +58,17 @@ class ClaudeService {
   }
 
   /**
-   * Genera el código HTML de una demo para un cliente.
+   * Genera el código HTML de una demo para un cliente con la clave real de
+   * Anthropic del usuario (la misma que pegó en Conexiones). Sin esa clave
+   * no se llama a ningún backend: se devuelve un marcador de posición que
+   * dice claramente que no es la demo real, en vez de fingir una.
    * @param {{name:string, sector:string, need?:string}} client
+   * @param {string} anthropicKey clave personal del usuario (sk-ant-...)
    * @returns {Promise<string>} HTML de la demo
    */
-  async generateAppCode(client) {
+  async generateAppCode(client, anthropicKey) {
+    if (!anthropicKey) return this._localTemplate(client);
+
     const brief = NEED_BRIEFS[client.need] || 'una demo de la máxima calidad posible para presentar el negocio del cliente';
     const rawPrompt = `Eres un diseñador y desarrollador senior especializado en crear entregables
       digitales de la máxima calidad posible. Crea ${brief} para ${client.name}, una empresa del
@@ -76,24 +82,24 @@ class ClaudeService {
       y ajustarse exactamente al tipo de necesidad descrito arriba.
       Devuelve únicamente el HTML, sin explicaciones.`;
     const prompt = this.compressPrompt(rawPrompt);
-    const cached = this._cacheGet(prompt);
+    const cacheKey = `${anthropicKey}|${prompt}`;
+    const cached = this._cacheGet(cacheKey);
     if (cached) return cached;
 
-    const task = () => this._callBackend(prompt, client);
+    const task = () => this._callBackend(prompt, anthropicKey, client);
     const html = this.queue ? await this.queue.push(task, 1) : await task();
-    this._cacheSet(prompt, html);
+    this._cacheSet(cacheKey, html);
     return html;
   }
 
-  async _callBackend(prompt, client) {
+  async _callBackend(prompt, anthropicKey, client) {
     if (!this.backendUrl) return this._localTemplate(client);
     try {
       const r = await fetch(`${this.backendUrl}/api/claude/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-password': this.authPassword },
-        body: JSON.stringify({ prompt })
+        body: JSON.stringify({ prompt, key: anthropicKey })
       });
-      if (!r.ok) return this._localTemplate(client);
       const data = await r.json();
       return data.html || this._localTemplate(client);
     } catch {
@@ -101,9 +107,14 @@ class ClaudeService {
     }
   }
 
-  /** Plantilla idéntica a la generación original, usada como respaldo. */
+  /** Marcador de posición honesto: se usa solo cuando no hay clave de
+   * Anthropic configurada o la llamada real falla, y lo dice explícitamente
+   * en vez de simular una demo terminada. */
   _localTemplate(client) {
-    return `<h1>Demo para ${client.name}</h1>`;
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:system-ui;padding:48px;text-align:center;color:#555;">
+      <h1>Demo para ${client.name}</h1>
+      <p>Esto es solo un marcador de posición: conecta tu clave de Anthropic en Conexiones para generar la demo real con IA.</p>
+      </body></html>`;
   }
 }
 

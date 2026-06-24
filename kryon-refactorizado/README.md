@@ -76,8 +76,13 @@ modo:
    |---|---|
    | `ADMIN_CODE` | Contraseña maestra del panel (por defecto `AXIOM2000`) |
    | `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | Persistencia de proyectos/clientes/oportunidades/apps |
-   | `ANTHROPIC_API_KEY` | Generación real de demos con Claude (si falta, responde con plantilla simple) |
    | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Notificaciones Web Push |
+
+   La generación real de demos con Claude no usa una variable de entorno:
+   cada usuario pega su propia clave de Anthropic en Conexiones, igual que
+   con Resend/Stripe/Google Places, y se envía solo en esa llamada (el
+   backend nunca la guarda). Sin esa clave, el Creador de demos muestra un
+   marcador de posición que lo dice explícitamente en vez de fingir una demo.
 
    Genera las claves VAPID con:
 
@@ -182,7 +187,7 @@ vercel
 ```
 
 Configura las variables de entorno del backend (`ADMIN_CODE`,
-`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `ANTHROPIC_API_KEY`,
+`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`,
 `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) desde el panel de Vercel
 (Project Settings → Environment Variables) antes de desplegar a producción.
 
