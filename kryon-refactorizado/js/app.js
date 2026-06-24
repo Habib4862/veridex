@@ -311,7 +311,7 @@ const App = {
       <div class="card-header">${Icons.svg('sparkles')} Asistente
         <button class="pill-btn" style="margin-left:auto;font-size:0.6rem;" onclick="App.clearAssistant()">${Icons.svg('x', 11)} Limpiar</button>
       </div>
-      <p style="font-size:0.6rem;color:var(--dim);">Pídele que consulte el estado del panel, avance el pipeline (contactar, enviar demo, aprobar, cobrar) o configure directamente el perfil del negocio, la URL del backend, el tema, los agentes IA, la vigilancia de leads, los proyectos o los opt-outs. Cualquier email o cobro real sigue pidiendo tu confirmación en su propio modal del panel, igual que si pulsaras el botón a mano. Nunca tiene acceso a tus claves de API ni a la contraseña maestra — esas solo se pegan a mano en "Conexiones"/Ajustes.</p>
+      <p style="font-size:0.6rem;color:var(--dim);">Pídele que consulte el estado del panel, avance el pipeline (contactar, enviar demo, aprobar, cobrar), configure directamente el perfil del negocio, la URL del backend, el tema, los agentes IA, la vigilancia de leads, los proyectos o los opt-outs, o que lea y arregle el código fuente de KRYON (como Claude Code): los cambios de código se suben directos a producción sin confirmación adicional. Cualquier email o cobro real sigue pidiendo tu confirmación en su propio modal del panel, igual que si pulsaras el botón a mano. Nunca tiene acceso a tus claves de API ni a la contraseña maestra — esas solo se pegan a mano en "Conexiones"/Ajustes.</p>
       <div class="assistant-log" id="assistantLog">${this.assistantMessagesHtml(messages)}</div>
       <div class="conn-input-row">
         <input class="search-input" id="assistantInput" placeholder="${this.assistantBusy ? 'Esperando respuesta...' : 'Escribe tu mensaje...'}" ${this.assistantBusy ? 'disabled' : ''}>
@@ -489,6 +489,20 @@ const App = {
           if (!input.name) return { error: 'Falta el nombre del proyecto' };
           const project = this.createProject(input.name);
           return { ok: true, project };
+        }
+        case 'read_repo_file': {
+          if (!input.path) return { error: 'Falta la ruta del archivo' };
+          return await this.assistant.readRepoFile(input.path);
+        }
+        case 'list_repo_dir': {
+          return await this.assistant.listRepoDir(input.path);
+        }
+        case 'write_repo_file': {
+          if (!input.path) return { error: 'Falta la ruta del archivo' };
+          if (typeof input.content !== 'string') return { error: 'Falta el contenido del archivo' };
+          const result = await this.assistant.writeRepoFile(input.path, input.content, input.message);
+          this.toast(`Código actualizado: ${input.path} (desplegando en Vercel...)`);
+          return result;
         }
         default:
           return { error: `Herramienta desconocida: ${name}` };

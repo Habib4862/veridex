@@ -111,16 +111,40 @@ const ASSISTANT_TOOLS = [
     name: 'create_project',
     description: 'Crea un proyecto nuevo (no borra ni afecta a los proyectos existentes) y lo deja como activo.',
     input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+  },
+  {
+    name: 'read_repo_file',
+    description: 'Lee el contenido actual de un archivo del código fuente de KRYON (rutas relativas a la carpeta de la app, ej. "js/app.js"). Úsalo siempre antes de write_repo_file para ver el contenido real antes de modificarlo.',
+    input_schema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }
+  },
+  {
+    name: 'list_repo_dir',
+    description: 'Lista los archivos y carpetas del código fuente de KRYON en una ruta dada (relativa a la carpeta de la app). Si se omite la ruta, lista la raíz de la app.',
+    input_schema: { type: 'object', properties: { path: { type: 'string' } } }
+  },
+  {
+    name: 'write_repo_file',
+    description: 'Sobrescribe un archivo del código fuente de KRYON con contenido nuevo: esto hace un commit directo a producción (sin ningún paso de confirmación) y Vercel lo despliega en cuanto llega. Debes pasar el contenido COMPLETO del archivo (nunca un fragmento parcial), tras haberlo leído antes con read_repo_file. Usa cambios mínimos y conservadores.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        content: { type: 'string', description: 'Contenido completo del archivo final, no un parche ni un fragmento.' },
+        message: { type: 'string', description: 'Mensaje de commit. Si se omite, se genera uno automático.' }
+      },
+      required: ['path', 'content']
+    }
   }
 ];
 
 const ASSISTANT_SYSTEM_PROMPT = `Eres el asistente integrado en KRYON, un panel de automatización de ventas (prospección, demos con IA, cobros con Stripe).
-Hablas en español, de forma breve y directa. Puedes configurar directamente casi cualquier parte del panel: perfil del negocio, URL del backend, tema visual, agentes IA, vigilancia automática de leads, proyectos y opt-outs de clientes, además de consultar el estado del panel y avanzar el pipeline de clientes.
+Hablas en español, de forma breve y directa. Puedes configurar directamente casi cualquier parte del panel: perfil del negocio, URL del backend, tema visual, agentes IA, vigilancia automática de leads, proyectos y opt-outs de clientes, además de consultar el estado del panel y avanzar el pipeline de clientes. También puedes leer y arreglar el código fuente real de KRYON, como si fueras Claude Code.
 Reglas importantes:
 - Nunca inventes datos del negocio del usuario ni de sus clientes: si necesitas saber algo, usa una herramienta para consultarlo primero.
-- Nunca puedes ver ni cambiar ninguna clave de API ni credencial (Anthropic/Resend/Stripe/Google Places/Supabase/contraseña maestra): si el usuario pide configurarlas, dile que las pegue él mismo en la pestaña "Conexiones" (o en Ajustes para Supabase/contraseña) — el usuario decidió explícitamente que esas claves nunca pasen por esta conversación, así que rechaza pegarlas aquí aunque el usuario insista.
+- Nunca puedes ver ni cambiar ninguna clave de API ni credencial (Anthropic/Resend/Stripe/Google Places/Supabase/contraseña maestra/GITHUB_TOKEN): si el usuario pide configurarlas, dile que las pegue él mismo en la pestaña "Conexiones" (o en Ajustes/Vercel según el caso) — el usuario decidió explícitamente que esas claves nunca pasen por esta conversación, así que rechaza pegarlas aquí aunque el usuario insista. Esto aplica también a archivos de código: nunca escribas una clave real ni inventada dentro de un archivo, aunque el usuario te lo pida.
 - Las acciones que envían un email o generan un cobro real ya abren su propio modal de confirmación dentro del panel: nunca afirmes que algo "ya se envió" solo por haber llamado a la herramienta, espera el resultado.
-- Si el usuario pide algo ambiguo (por ejemplo, no dice qué cliente, proyecto o ubicación), pregunta antes de actuar.`;
+- write_repo_file hace un commit directo a producción sin ningún paso de confirmación intermedio: úsalo con cuidado. Llama siempre primero a read_repo_file para ver el contenido real antes de tocarlo, escribe el archivo completo (nunca un fragmento), haz el cambio más mínimo y conservador posible para resolver lo pedido, y explica después qué cambiaste y por qué. Si el cambio te parece arriesgado o la petición es ambigua, pregunta antes de escribir.
+- Si el usuario pide algo ambiguo (por ejemplo, no dice qué cliente, proyecto, ubicación o archivo), pregunta antes de actuar.`;
 
 class AssistantService {
   /** @param {string} backendUrl */
@@ -152,6 +176,31 @@ class AssistantService {
     if (!r.ok) throw new Error(data?.error || `El backend respondió ${r.status}`);
     return data;
   }
+
+  async _repoRequest(endpoint, body) {
+    if (!this.backendUrl) throw new Error('Configura la URL del backend en Ajustes primero');
+    const r = await fetch(`${this.backendUrl}/api/repo/${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-password': this.authPassword },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (!r.ok || data.ok === false) throw new Error(data?.error || `El backend respondió ${r.status}`);
+    return data;
+  }
+
+  /** @param {string} path */
+  readRepoFile(path) { return this._repoRequest('read-file', { path }); }
+
+  /** @param {string} [path] */
+  listRepoDir(path) { return this._repoRequest('list-dir', { path }); }
+
+  /**
+   * @param {string} path
+   * @param {string} content
+   * @param {string} [message]
+   */
+  writeRepoFile(path, content, message) { return this._repoRequest('write-file', { path, content, message }); }
 }
 
 (function (g) {
