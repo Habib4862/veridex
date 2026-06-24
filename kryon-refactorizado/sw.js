@@ -9,7 +9,7 @@
  * nuevo. Al activarse una versión nueva, avisa a las pestañas abiertas para
  * que se recarguen solas y queden al día sin que el usuario tenga que saberlo.
  */
-const CACHE_NAME = 'kryon-cache-v12';
+const CACHE_NAME = 'kryon-cache-v13';
 const ASSETS = [
   './index.html',
   './css/style.css',
