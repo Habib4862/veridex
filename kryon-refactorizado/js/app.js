@@ -97,9 +97,10 @@ const App = {
   store: {
     projects: [], activeProjectId: null,
     opportunities: [], clients: [], apps: [], logs: [], history: [], watchlist: [], optOuts: [], marketScans: [],
-    pendingSends: [], agentsEnabled: false,
+    pendingSends: [], agentsEnabled: false, assistantMessages: [],
     portfolio: { total: 0, cash: 0 }
   },
+  assistantBusy: false,
   chart: null, intervals: [], startTime: Date.now(),
   backendUrl: '',
   lastBackupAt: 0,
@@ -114,8 +115,10 @@ const App = {
     this.healer = new HealerService();
     this.apiQueue = new APIQueue(2);
     this.claude = new ClaudeService(this.backendUrl, this.apiQueue);
+    this.assistant = new AssistantService(this.backendUrl);
     this.masterPassword = localStorage.getItem('axiom_master_pass') || '';
     this.claude.setAuthPassword(this.masterPassword);
+    this.assistant.setAuthPassword(this.masterPassword);
     this.pipeline = new PipelineManager(this.store, {
       onLog: (msg) => this.addLog(msg, 'info')
     });
@@ -143,6 +146,7 @@ const App = {
       localStorage.setItem('axiom_master_pass', pass);
       this.masterPassword = pass;
       this.claude.setAuthPassword(pass);
+      this.assistant.setAuthPassword(pass);
       document.getElementById('loginOverlay').style.display = 'none';
       this.renderSkeleton();
       this.loadFromCloud().then(() => this.afterLoad());
@@ -157,6 +161,7 @@ const App = {
     this.loadMarketScans();
     this.loadPendingSends();
     this.loadAgentsEnabled();
+    this.loadAssistantMessages();
     this.renderShell();
     this.render(true);
     this.startCycles();
@@ -275,6 +280,214 @@ const App = {
 
   loadAgentsEnabled() {
     this.store.agentsEnabled = localStorage.getItem(`axiom_agents_enabled_${this.store.activeProjectId}`) === '1';
+  },
+
+  /* ----------------------- Asistente (chat con herramientas) ----------------------- */
+
+  loadAssistantMessages() {
+    try { this.store.assistantMessages = JSON.parse(localStorage.getItem(`axiom_assistant_${this.store.activeProjectId}`) || '[]'); }
+    catch { this.store.assistantMessages = []; }
+  },
+
+  saveAssistantMessages() {
+    localStorage.setItem(`axiom_assistant_${this.store.activeProjectId}`, JSON.stringify(this.store.assistantMessages || []));
+  },
+
+  clearAssistant() {
+    this.store.assistantMessages = [];
+    this.saveAssistantMessages();
+    this.render();
+  },
+
+  escapeHtml(s = '') {
+    return String(s).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  },
+
+  renderAssistant(c) {
+    const messages = this.store.assistantMessages || [];
+    c.innerHTML = `<div class="card">
+      <div class="card-header">${Icons.svg('sparkles')} Asistente
+        <button class="pill-btn" style="margin-left:auto;font-size:0.6rem;" onclick="App.clearAssistant()">${Icons.svg('x', 11)} Limpiar</button>
+      </div>
+      <p style="font-size:0.6rem;color:var(--dim);">Pídele que consulte el estado del panel o avance el pipeline (contactar, enviar demo, aprobar, cobrar). Puede configurar la URL del backend y los datos del negocio directamente; cualquier email o cobro real sigue pidiendo tu confirmación en su propio modal del panel, igual que si pulsaras el botón a mano. No tiene acceso a tus claves de API.</p>
+      <div class="assistant-log" id="assistantLog">${this.assistantMessagesHtml(messages)}</div>
+      <div class="conn-input-row">
+        <input class="search-input" id="assistantInput" placeholder="${this.assistantBusy ? 'Esperando respuesta...' : 'Escribe tu mensaje...'}" ${this.assistantBusy ? 'disabled' : ''}>
+        <button class="pill-btn primary" id="assistantSendBtn" ${this.assistantBusy ? 'disabled' : ''} onclick="App.sendAssistantMessage(document.getElementById('assistantInput').value); document.getElementById('assistantInput').value='';">${Icons.svg('mail', 12)} Enviar</button>
+      </div>
+    </div>`;
+    const input = document.getElementById('assistantInput');
+    if (input) {
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter' && !this.assistantBusy) {
+          App.sendAssistantMessage(input.value);
+          input.value = '';
+        }
+      };
+      if (!this.assistantBusy) input.focus();
+    }
+    const log = document.getElementById('assistantLog');
+    if (log) log.scrollTop = log.scrollHeight;
+  },
+
+  assistantMessagesHtml(messages) {
+    const html = messages.map((m) => this.assistantMessageHtml(m)).filter(Boolean).join('');
+    return html || `<div class="empty-state">${Icons.svg('sparkles', 24)}<span>Escríbele algo al asistente para empezar</span></div>`;
+  },
+
+  assistantMessageHtml(m) {
+    if (m.role === 'user') {
+      if (typeof m.content !== 'string') return '';
+      return `<div class="assistant-msg assistant-user"><strong>Tú</strong><p>${this.escapeHtml(m.content)}</p></div>`;
+    }
+    if (m.role === 'assistant') {
+      const blocks = Array.isArray(m.content) ? m.content : [{ type: 'text', text: String(m.content) }];
+      const text = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n').trim();
+      const tools = blocks.filter((b) => b.type === 'tool_use').map((b) => `<div class="assistant-tool">${Icons.svg('cpu', 11)} ${this.escapeHtml(b.name)}</div>`).join('');
+      if (!text && !tools) return '';
+      return `<div class="assistant-msg assistant-assistant"><strong>Asistente</strong>${text ? `<p>${this.escapeHtml(text)}</p>` : ''}${tools}</div>`;
+    }
+    return '';
+  },
+
+  sendAssistantMessage(text) {
+    const trimmed = (text || '').trim();
+    if (!trimmed || this.assistantBusy) return;
+    if (!this.backendUrl) return this.toast('Configura la URL del backend en Ajustes primero');
+    if (!this.connections.getKey('anthropic')) return this.toast('Configura tu clave de Anthropic en Conexiones primero');
+    this.store.assistantMessages.push({ role: 'user', content: trimmed });
+    this.assistantBusy = true;
+    this.render();
+    this.runAssistantTurn()
+      .catch((err) => { this.store.assistantMessages.push({ role: 'assistant', content: `Error: ${err.message}` }); })
+      .then(() => {
+        this.assistantBusy = false;
+        this.saveAssistantMessages();
+        this.render();
+      });
+  },
+
+  /** Bucle de uso de herramientas: cada vuelta puede terminar en texto (fin) o
+   * en "tool_use" (hay que ejecutar la(s) herramienta(s) y devolverle el
+   * resultado a Claude antes de continuar). `depth` evita un bucle infinito
+   * si el modelo encadena demasiadas llamadas seguidas. */
+  async runAssistantTurn(depth = 0) {
+    if (depth >= 8) {
+      this.store.assistantMessages.push({ role: 'assistant', content: 'Demasiados pasos seguidos, prueba a pedírmelo de nuevo de forma más simple.' });
+      return;
+    }
+    const anthropicKey = this.connections.getKey('anthropic');
+    const data = await this.assistant.send(this.store.assistantMessages, anthropicKey);
+    this.store.assistantMessages.push({ role: 'assistant', content: data.content || [] });
+    if (data.stop_reason === 'tool_use') {
+      const toolUses = (data.content || []).filter((b) => b.type === 'tool_use');
+      const toolResults = [];
+      for (const block of toolUses) {
+        const result = await this.runAssistantTool(block.name, block.input || {});
+        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify(result) });
+      }
+      this.store.assistantMessages.push({ role: 'user', content: toolResults });
+      this.saveAssistantMessages();
+      this.render();
+      return this.runAssistantTurn(depth + 1);
+    }
+  },
+
+  /** Ejecuta exactamente la misma función que usaría el usuario pulsando el botón
+   * correspondiente a mano (contactClient/sendDemo/approveClient/requestPayment),
+   * así que el asistente nunca tiene más permiso que un clic manual: las acciones
+   * que envían un email o generan un cobro real siguen abriendo su propio modal
+   * de confirmación. No expone ninguna herramienta de lectura/escritura de claves. */
+  async runAssistantTool(name, input) {
+    try {
+      switch (name) {
+        case 'get_panel_status': return this.getPanelStatusForAssistant();
+        case 'list_clients': return this.listClientsForAssistant(input.stage);
+        case 'set_backend_url': {
+          if (!input.url) return { error: 'Falta la URL' };
+          localStorage.setItem('axiom_backend_url', input.url.trim());
+          return { ok: true, message: 'URL guardada. Hace falta recargar la página para que tenga efecto.' };
+        }
+        case 'set_business_profile': {
+          const current = this.getProfile();
+          const updated = {
+            businessName: input.businessName !== undefined ? input.businessName : current.businessName,
+            senderName: input.senderName !== undefined ? input.senderName : current.senderName,
+            fromEmail: input.fromEmail !== undefined ? input.fromEmail : current.fromEmail
+          };
+          localStorage.setItem('axiom_profile', JSON.stringify(updated));
+          return { ok: true, profile: updated };
+        }
+        case 'contact_client': {
+          const c = this.findClientByName(input.name);
+          if (!c) return { error: 'No encuentro a ese cliente' };
+          if (c.stage !== 'nuevo') return { error: `${c.name} no está en etapa "nuevo" (está en "${c.stage}")` };
+          await this.contactClient(c.id);
+          return { ok: true, message: `Se abrió el contacto de ${c.name} para que lo revises y confirmes en el panel.` };
+        }
+        case 'send_demo': {
+          const c = this.findClientByName(input.name);
+          if (!c) return { error: 'No encuentro a ese cliente' };
+          if (c.stage !== 'contactado') return { error: `${c.name} no está en etapa "contactado" (está en "${c.stage}")` };
+          await this.sendDemo(c.id);
+          return { ok: true, message: `Se generó la demo de ${c.name} y se abrió para que la revises y confirmes en el panel.` };
+        }
+        case 'approve_client': {
+          const c = this.findClientByName(input.name);
+          if (!c) return { error: 'No encuentro a ese cliente' };
+          if (c.stage !== 'demo_enviada') return { error: `${c.name} no está en etapa "demo_enviada" (está en "${c.stage}")` };
+          await this.approveClient(c.id);
+          return { ok: true, message: `${c.name} marcado como aprobado.` };
+        }
+        case 'request_payment': {
+          const c = this.findClientByName(input.name);
+          if (!c) return { error: 'No encuentro a ese cliente' };
+          if (c.stage !== 'aprobado') return { error: `${c.name} no está en etapa "aprobado" (está en "${c.stage}")` };
+          await this.requestPayment(c.id);
+          return { ok: true, message: `Enlace de pago de ${c.name} listo. Si hay email configurado, queda esperando tu aprobación en "Agentes".` };
+        }
+        default:
+          return { error: `Herramienta desconocida: ${name}` };
+      }
+    } catch (err) {
+      return { error: err.message || String(err) };
+    }
+  },
+
+  findClientByName(name) {
+    const q = String(name || '').trim().toLowerCase();
+    if (!q) return null;
+    return this.store.clients.find((c) => c.name.toLowerCase() === q)
+      || this.store.clients.find((c) => c.name.toLowerCase().includes(q));
+  },
+
+  getPanelStatusForAssistant() {
+    const counts = {};
+    this.stageOrder.forEach((s) => { counts[s] = 0; });
+    this.store.clients.forEach((c) => { if (counts[c.stage] !== undefined) counts[c.stage]++; });
+    const profile = this.getProfile();
+    return {
+      backendConfigured: !!this.backendUrl,
+      backendUrl: this.backendUrl || null,
+      connections: {
+        anthropic: this.connections.isConfigured('anthropic'),
+        resend: this.connections.isConfigured('resend'),
+        stripe: this.connections.isConfigured('stripe'),
+        google_places: this.connections.isConfigured('google_places')
+      },
+      businessProfile: {
+        businessName: profile.businessName || null,
+        senderName: profile.senderName || null,
+        fromEmailConfigured: !!profile.fromEmail
+      },
+      clientsByStage: counts,
+      totalClients: this.store.clients.length
+    };
+  },
+
+  listClientsForAssistant(stage) {
+    const list = stage ? this.store.clients.filter((c) => c.stage === stage) : this.store.clients;
+    return list.map((c) => ({ name: c.name, sector: c.sector, stage: c.stage, budget: c.budget, hasEmail: !!c.email }));
   },
 
   /** El usuario decide explícitamente cuándo dejar trabajar a los agentes solos:
@@ -601,6 +814,7 @@ const App = {
         <div class="nav-tab" data-tab="clients">${Icons.svg('target')} Clientes</div>
         <div class="nav-tab" data-tab="creator">${Icons.svg('wrench')} Creador</div>
         <div class="nav-tab" data-tab="agents">${Icons.svg('cpu')} Agentes</div>
+        <div class="nav-tab" data-tab="assistant">${Icons.svg('sparkles')} Asistente</div>
         <div class="nav-tab" data-tab="connections">${Icons.svg('cloud')} Conexiones</div>
         <div class="nav-tab" data-tab="pricing">${Icons.svg('coins')} Precios</div>
         <div class="nav-tab" data-tab="editor">${Icons.svg('code')} Editor</div>
@@ -634,6 +848,7 @@ const App = {
       case 'clients': this.renderClients(c); break;
       case 'creator': this.renderCreator(c); break;
       case 'agents': this.renderAgents(c); break;
+      case 'assistant': this.renderAssistant(c); break;
       case 'connections': this.renderConnections(c); break;
       case 'pricing': c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('euro')} Precios</div>
         <div class="grid grid-3">${[

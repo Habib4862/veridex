@@ -18,11 +18,11 @@ const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 8192;
 const MAX_CONTINUATIONS = 2;
 
-async function callAnthropic(key, messages) {
+async function callAnthropic(key, messages, extra = {}) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-    body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, messages })
+    body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, messages, ...extra })
   });
   const data = await r.json();
   if (!r.ok) throw new Error(data?.error?.message || `Anthropic respondió ${r.status}`);
@@ -49,6 +49,25 @@ router.post('/generate', async (req, res) => {
       continuations++;
     }
     res.json({ html });
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+/**
+ * /chat — Proxy con uso de herramientas para el "Asistente" del panel. Es un
+ * proxy tonto a propósito: no conoce qué hace cada herramienta ni ejecuta
+ * nada, solo reenvía la conversación + el esquema de herramientas a Claude
+ * y devuelve la respuesta cruda. La ejecución real (y todas las protecciones
+ * de "nunca enviar/cobrar sin confirmación") vive en el frontend.
+ */
+router.post('/chat', async (req, res) => {
+  const { messages, key, tools, system } = req.body || {};
+  if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'messages requerido' });
+  if (!key) return res.status(400).json({ error: 'Falta tu clave de Anthropic (Conexiones)' });
+  try {
+    const data = await callAnthropic(key, messages, { tools, system });
+    res.json(data);
   } catch (err) {
     res.status(502).json({ error: err.message });
   }

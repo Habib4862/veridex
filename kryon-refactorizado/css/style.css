@@ -95,6 +95,14 @@ canvas#brainCanvas { position: fixed; inset: 0; z-index: 1; }
 
 .chart-container { position: relative; height: 220px; margin-top: 10px; }
 
+.assistant-log { height: 360px; overflow-y: auto; background: rgba(0, 0, 0, 0.35); border-radius: var(--radius-sm); padding: 10px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.assistant-msg { max-width: 85%; padding: 8px 10px; border-radius: var(--radius-sm); font-size: 0.72rem; line-height: 1.45; }
+.assistant-msg strong { display: block; font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 3px; }
+.assistant-msg p { margin: 0; white-space: pre-wrap; }
+.assistant-user { align-self: flex-end; background: rgba(77, 240, 255, 0.1); border: 1px solid rgba(77, 240, 255, 0.25); }
+.assistant-assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); }
+.assistant-tool { margin-top: 4px; font-size: 0.62rem; color: var(--cyan); display: flex; align-items: center; gap: 4px; }
+
 .node-list { display: flex; flex-direction: column; gap: 6px; }
 .node-item { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; display: flex; align-items: center; gap: 10px; transition: var(--transition); font-size: 0.72rem; }
 .node-item:hover { border-color: rgba(77, 240, 255, 0.35); background: rgba(77, 240, 255, 0.05); transform: translateX(2px); }
