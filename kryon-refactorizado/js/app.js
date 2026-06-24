@@ -847,7 +847,11 @@ const App = {
       if (!data.ok) { if (!silent) this.toast(data.error || 'No se pudo buscar negocios'); return null; }
       this.recordMarketScan(sector, location, data.leads || []);
 
-      const existingPlaceIds = new Set(this.store.opportunities.map(o => o.placeId).filter(Boolean));
+      // Un negocio ya convertido en cliente desaparece de `opportunities`, así que
+      // hay que comprobar también `clients` — si no, la vigilancia automática lo
+      // vuelve a detectar como "nuevo" en cada ciclo y reenvía el primer contacto
+      // a alguien que ya está en el pipeline (incluso ya facturado).
+      const existingPlaceIds = new Set([...this.store.opportunities, ...this.store.clients].map(o => o.placeId).filter(Boolean));
       const newLeads = (data.leads || []).filter(lead => !lead.placeId || !existingPlaceIds.has(lead.placeId));
       for (const lead of newLeads) {
         lead.email = await this.findEmailFor(lead);
@@ -1324,19 +1328,36 @@ const App = {
     new Notification(title, { body });
   },
 
+  /** La Push API exige applicationServerKey como Uint8Array, no como el string
+   * base64url que devuelve el backend (formato estándar de `web-push generate-vapid-keys`) —
+   * sin esta conversión, pushManager.subscribe() lanza un TypeError y la suscripción
+   * push real (la que permite recibir notificaciones con el navegador cerrado) nunca
+   * llega a crearse, aunque el permiso del navegador se conceda igual. */
+  urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+  },
+
   async requestPush() {
     if (typeof Notification === 'undefined') { this.toast('Notificaciones no soportadas'); return; }
     const perm = await Notification.requestPermission();
     if (perm !== 'granted') { this.toast('Permiso denegado'); return; }
-    this.toast('Notificaciones activadas');
     if ('serviceWorker' in navigator && this.backendUrl) {
       try {
         const reg = await navigator.serviceWorker.ready;
         const keyRes = await fetch(`${this.backendUrl}/api/push/vapid-public-key`, { headers: { 'x-admin-password': this.masterPassword } });
         const { publicKey } = await keyRes.json();
-        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: publicKey });
+        if (!publicKey) { this.toast('Notificaciones locales activadas (el backend no tiene VAPID configurado, no llegarán con el navegador cerrado)'); return; }
+        const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: this.urlBase64ToUint8Array(publicKey) });
         await fetch(`${this.backendUrl}/api/push/subscribe`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword }, body: JSON.stringify(sub) });
-      } catch { /* backend de push no disponible: las notificaciones locales siguen funcionando */ }
+        this.toast('Notificaciones push activadas');
+      } catch {
+        this.toast('Notificaciones locales activadas, pero no se pudo activar el push remoto');
+      }
+    } else {
+      this.toast('Notificaciones locales activadas');
     }
   },
 
