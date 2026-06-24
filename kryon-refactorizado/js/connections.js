@@ -1,18 +1,22 @@
 /**
- * connections.js — Registro de las 10 conexiones externas de AXIOM CORE
+ * connections.js — Registro de las 11 conexiones externas de AXIOM CORE
  * y una cola con prioridad para limitar llamadas API concurrentes.
  *
  * Nota de honestidad: Supabase, Resend, Anthropic, Stripe, Meta, TikTok,
- * LinkedIn y GA4 tienen un endpoint de salud real implementado (vía backend,
- * o directo al frontend en el caso de Supabase). Google Ads usa OAuth2 con
- * varias credenciales (client id/secret, refresh token) en lugar de una
- * sola clave pegada, así que no se puede verificar en vivo con este campo
- * único — se expone como tarjeta de formato/credenciales lista para
- * conectarse cuando se implemente ese flujo OAuth.
+ * LinkedIn, GA4 y Google Places tienen un endpoint de salud real
+ * implementado (vía backend, o directo al frontend en el caso de
+ * Supabase). Google Ads usa OAuth2 con varias credenciales (client
+ * id/secret, refresh token) en lugar de una sola clave pegada, así que no
+ * se puede verificar en vivo con este campo único — se expone como tarjeta
+ * de formato/credenciales lista para conectarse cuando se implemente ese
+ * flujo OAuth.
  *
  * GA4 no usa una clave simple: en su campo se pega el JSON completo de la
  * cuenta de servicio de Google Cloud (con client_email y private_key) más
  * un campo "property_id" añadido a mano con el ID de la propiedad de GA4.
+ *
+ * Google Places alimenta la búsqueda real de leads (negocios locales
+ * existentes) que reemplaza al antiguo generador aleatorio de clientes.
  */
 const CONNECTIONS_REGISTRY = [
   { id: 'stripe', name: 'Stripe', color: '#635bff', storageKey: 'axiom_key_stripe', live: false, keyPattern: /^(sk|rk)_(test|live)_[A-Za-z0-9]{10,}$/, liveTest: true },
@@ -22,6 +26,7 @@ const CONNECTIONS_REGISTRY = [
   { id: 'linkedin', name: 'LinkedIn', color: '#0a66c2', storageKey: 'axiom_key_linkedin', live: false, keyPattern: /^.{16,}$/, liveTest: true },
   { id: 'x', name: 'X (Twitter)', color: '#e2e4ed', storageKey: 'axiom_key_x', live: false, keyPattern: /^.{16,}$/, liveTest: true },
   { id: 'ga4', name: 'Google Analytics 4', color: '#f9ab00', storageKey: 'axiom_key_ga4', live: true, keyPattern: /^\{(?=.*"private_key")(?=.*"client_email")(?=.*"property_id").+\}$/s, liveTest: true },
+  { id: 'google_places', name: 'Google Places (Leads)', color: '#34a853', storageKey: 'axiom_key_google_places', live: true, keyPattern: /^AIza[0-9A-Za-z_-]{35}$/, liveTest: true },
   { id: 'supabase', name: 'Supabase', color: '#3ecf8e', storageKey: 'axiom_supabase_key', live: true, keyPattern: /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/, liveTest: true },
   { id: 'resend', name: 'Resend', color: '#000000', storageKey: 'axiom_key_resend', live: true, keyPattern: /^re_[A-Za-z0-9_]+$/, liveTest: true },
   { id: 'anthropic', name: 'Anthropic', color: '#d97757', storageKey: 'axiom_key_anthropic', live: true, keyPattern: /^sk-ant-[A-Za-z0-9_-]+$/, liveTest: true }

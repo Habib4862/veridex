@@ -6,7 +6,7 @@ const { ConnectionsManager, APIQueue, CONNECTIONS_REGISTRY } = window;
 describe('ConnectionsManager', () => {
   beforeEach(() => localStorage.clear());
 
-  it('lists all 10 registered connections, none configured by default', () => {
+  it('lists all registered connections, none configured by default', () => {
     const mgr = new ConnectionsManager(null);
     const list = mgr.list();
     expect(list).toHaveLength(CONNECTIONS_REGISTRY.length);
@@ -44,6 +44,8 @@ describe('ConnectionsManager', () => {
     expect(mgr.validateFormat('anthropic', '')).toBe(false);
     expect(mgr.validateFormat('ga4', '{"client_email":"a@b.iam.gserviceaccount.com","private_key":"-----BEGIN PRIVATE KEY-----\\n...","property_id":"123456789"}')).toBe(true);
     expect(mgr.validateFormat('ga4', '{"property_id":"123"}')).toBe(false);
+    expect(mgr.validateFormat('google_places', 'AIza' + 'a'.repeat(35))).toBe(true);
+    expect(mgr.validateFormat('google_places', 'not-a-key')).toBe(false);
   });
 
   it('reports which integrations support a real live test vs. format-only', () => {
@@ -58,6 +60,7 @@ describe('ConnectionsManager', () => {
     expect(mgr.supportsLiveTest('x')).toBe(true);
     expect(mgr.supportsLiveTest('google_ads')).toBe(false);
     expect(mgr.supportsLiveTest('ga4')).toBe(true);
+    expect(mgr.supportsLiveTest('google_places')).toBe(true);
   });
 
   it('returns the stored key value via getKey', () => {

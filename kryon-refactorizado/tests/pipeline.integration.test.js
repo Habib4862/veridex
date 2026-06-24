@@ -12,7 +12,7 @@ describe('Integración pipeline + agentes + sanación', () => {
     localStorage.clear();
     store = {
       clients: [], opportunities: [], apps: [],
-      portfolio: { total: 25000, cash: 10000, invested: 15000, returns: 0 },
+      portfolio: { total: 0, cash: 0 },
       logs: [], activeProjectId: 'proj-int'
     };
     agentsManager = new AgentsManager();
@@ -26,10 +26,13 @@ describe('Integración pipeline + agentes + sanación', () => {
   it('completing a full sales cycle levels up agents and logs every step', () => {
     store.clients.push({ id: 'c1', name: 'Ana', sector: 'Salud', budget: 5000, stage: 'nuevo' });
 
-    for (let i = 0; i < 4; i++) pipeline.runSalesCycle();
+    pipeline.contactClient('c1');
+    pipeline.sendDemo('c1');
+    pipeline.approveClient('c1');
+    pipeline.completeProduct('c1');
 
     expect(store.clients[0].stage).toBe('completado');
-    expect(store.portfolio.cash).toBe(15000);
+    expect(store.portfolio.cash).toBe(5000);
     expect(agentsManager.get('clientes').xp).toBe(30); // contact(10) + approve(20)
     expect(agentsManager.get('developer').xp).toBe(15);
     expect(agentsManager.get('finanzas').xp).toBe(25);
@@ -54,8 +57,11 @@ describe('Integración pipeline + agentes + sanación', () => {
 
   it('health report reflects pipeline progress and agent growth together', () => {
     store.clients.push({ id: 'c1', name: 'Lucia', sector: 'Legaltech', budget: 3000, stage: 'nuevo' });
-    for (let i = 0; i < 4; i++) pipeline.runSalesCycle();
-    pipeline.autoScan();
+    pipeline.contactClient('c1');
+    pipeline.sendDemo('c1');
+    pipeline.approveClient('c1');
+    pipeline.completeProduct('c1');
+    pipeline.registerOpportunity({ name: 'Negocio Real' }, 'Ecommerce', 'Web');
 
     const report = healer.healthReport(store, { brainHealthy: true, agentsManager, lastBackupAt: Date.now() });
     expect(report['Pipeline']).toBe(100); // único cliente, ya completado
