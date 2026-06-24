@@ -1,16 +1,22 @@
 /**
- * agents.js — Los 6 especialistas de AXIOM CORE. No hay XP ni niveles
+ * agents.js — Los 7 especialistas de AXIOM CORE. No hay XP ni niveles
  * ficticios: cada agente representa una función real del negocio (detectar
- * leads, escribir y enviar el primer contacto, programar la demo, cobrar,
- * cumplir la ley) y su estado se calcula a partir de si la integración real
- * que necesita para trabajar está configurada — no de una barra de progreso
- * inventada.
+ * leads, escribir y enviar el primer contacto, programar la demo, hacer
+ * seguimiento, cobrar, cumplir la ley) y su estado se calcula a partir de si
+ * la integración real que necesita para trabajar está configurada — no de
+ * una barra de progreso inventada.
+ *
+ * Para que se "lleven bien": Developer y Seguimiento comparten la misma cola
+ * de aprobación (store.pendingSends) en vez de enviar nada por su cuenta, y
+ * Seguimiento nunca prepara un recordatorio para un cliente que ya tiene
+ * algo esperando en esa cola — ver runFollowUpCycle/runAgentCycle en app.js.
  */
 const AGENT_DEFS = [
   { id: 'oportunidad', name: 'Detección', icon: 'search', role: 'Encuentra negocios reales que podrían necesitar tus servicios (Google Places).', requires: 'google_places' },
   { id: 'marketing', name: 'Marketing', icon: 'megaphone', role: 'Encuentra el email real del negocio y redacta/envía el primer contacto (Resend).', requires: 'resend' },
   { id: 'clientes', name: 'Clientes', icon: 'target', role: 'Gestiona el pipeline de ventas: contacto, demo, aprobación.', requires: null },
   { id: 'developer', name: 'Developer', icon: 'code', role: 'Diseña y programa la demo real (web, ventas o automatización) con Claude.', requires: 'anthropic' },
+  { id: 'seguimiento', name: 'Seguimiento', icon: 'bell', role: 'Detecta clientes contactados o con demo enviada que llevan días sin avanzar y prepara un recordatorio real para la cola de aprobación.', requires: 'resend' },
   { id: 'finanzas', name: 'Finanzas', icon: 'coins', role: 'Genera el cobro real con Stripe y confirma cuándo se ha pagado.', requires: 'stripe' },
   { id: 'legal', name: 'Legal', icon: 'scale', role: 'Exige que todo email automático identifique al remitente y ofrezca darse de baja.', requires: null }
 ];

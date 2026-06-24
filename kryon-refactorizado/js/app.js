@@ -223,8 +223,10 @@ const App = {
     this.intervals.push(setInterval(() => this.autoCheckPayments(), 120000));
     this.intervals.push(setInterval(() => this.runWatchlist(), 300000));
     this.intervals.push(setInterval(() => this.runAgentCycle(), 180000));
+    this.intervals.push(setInterval(() => this.runFollowUpCycle(), 300000));
     this.runWatchlist();
     this.runAgentCycle();
+    this.runFollowUpCycle();
   },
 
   clearIntervals() { this.intervals.forEach(clearInterval); this.intervals = []; },
@@ -290,42 +292,107 @@ const App = {
    * cliente en etapa "contactado" que todavía no tiene una, y deja el email de
    * entrega en la cola de aprobación — nunca lo envía por su cuenta. Solo corre
    * si el usuario activó "Agentes IA" y solo mientras esta pestaña esté abierta
-   * (no hay backend con cron: si se cierra el navegador, el ciclo se detiene). */
+   * (no hay backend con cron: si se cierra el navegador, el ciclo se detiene).
+   * El candado `_agentCycleRunning` evita que dos rondas se pisen si una tarda
+   * más que el intervalo: sin él, dos rondas solapadas podrían generar dos
+   * demos reales (y gastar la clave de Anthropic dos veces) para el mismo cliente. */
   async runAgentCycle() {
-    if (!this.store.agentsEnabled) return;
+    if (!this.store.agentsEnabled || this._agentCycleRunning) return;
     const anthropicKey = this.connections.getKey('anthropic');
     if (!anthropicKey) return;
     const candidates = (this.store.clients || []).filter(c => c.stage === 'contactado' && !c.demoId);
     const batch = candidates.slice(0, 3);
     if (!batch.length) return;
+    this._agentCycleRunning = true;
     let generated = 0;
-    for (const c of batch) {
-      try {
-        const code = await this.claude.generateAppCode(c, anthropicKey);
-        const result = this.pipeline.sendDemo(c.id, code);
-        if (!result) continue;
-        const { app } = result;
-        generated++;
-        if (this.cloud.connected) { await this.cloud.insert('apps', app); await this.cloud.update('clients', c.id, { stage: 'demo_enviada', demo_id: app.id }); }
-        const profile = this.getProfile();
-        const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail) && !this.isOptedOut(c.email);
-        if (canEmail) {
-          const sender = profile.senderName || profile.businessName || 'nuestro equipo';
-          const subject = `${profile.businessName || sender}: tu demo está lista`;
-          this.queuePendingSend(c, subject, code);
-        }
-      } catch { /* un fallo generando la demo de un cliente no debe parar al resto del lote */ }
+    try {
+      for (const c of batch) {
+        try {
+          const code = await this.claude.generateAppCode(c, anthropicKey);
+          const result = this.pipeline.sendDemo(c.id, code);
+          if (!result) continue;
+          const { app } = result;
+          generated++;
+          if (this.cloud.connected) { await this.cloud.insert('apps', app); await this.cloud.update('clients', c.id, { stage: 'demo_enviada', demo_id: app.id }); }
+          const profile = this.getProfile();
+          const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail) && !this.isOptedOut(c.email);
+          if (canEmail) {
+            const sender = profile.senderName || profile.businessName || 'nuestro equipo';
+            const subject = `${profile.businessName || sender}: tu demo está lista`;
+            this.queuePendingSend(c, subject, code, 'demo');
+          }
+        } catch { /* un fallo generando la demo de un cliente no debe parar al resto del lote */ }
+      }
+    } finally {
+      this._agentCycleRunning = false;
     }
     if (generated) {
       this.saveLocal();
       this.render();
-      this.notify('AXIOM CORE', `Agentes IA: ${generated} demo(s) nueva(s) generada(s)${this.store.pendingSends?.length ? ` · ${this.store.pendingSends.length} esperando tu aprobación` : ''}`);
+      this.notify('AXIOM CORE', `Agente Developer: ${generated} demo(s) nueva(s) generada(s)${this.store.pendingSends?.length ? ` · ${this.store.pendingSends.length} esperando tu aprobación` : ''}`);
     }
   },
 
-  queuePendingSend(c, subject, html) {
+  /** Ronda autónoma del agente Seguimiento: clientes reales que llevan
+   * demasiado tiempo parados en "contactado" o "demo_enviada" sin que el
+   * usuario haya actuado reciben un recordatorio real, preparado y puesto en
+   * la misma cola que usa Developer — nunca se envía solo. Para "llevarse
+   * bien" con Developer, ignora cualquier cliente que ya tenga algo
+   * esperando aprobación (queuedClientIds) y nunca repite el mismo
+   * recordatorio antes de que pase otro ciclo completo (lastFollowUpAt). */
+  async runFollowUpCycle() {
+    if (!this.store.agentsEnabled || this._followUpCycleRunning) return;
+    const profile = this.getProfile();
+    if (!this.connections.getKey('resend') || !profile.fromEmail) return;
+    const THRESHOLDS = { contactado: 4 * 86400000, demo_enviada: 3 * 86400000 };
+    const now = Date.now();
+    const queuedClientIds = new Set((this.store.pendingSends || []).map(p => p.clientId));
+    const candidates = (this.store.clients || []).filter(c => {
+      const threshold = THRESHOLDS[c.stage];
+      if (!threshold || !c.email || this.isOptedOut(c.email) || queuedClientIds.has(c.id)) return false;
+      const sinceStage = now - (c.stageChangedAt || 0);
+      const sinceFollowUp = c.lastFollowUpAt ? now - c.lastFollowUpAt : Infinity;
+      return c.stageChangedAt && sinceStage >= threshold && sinceFollowUp >= threshold;
+    });
+    const batch = candidates.slice(0, 3);
+    if (!batch.length) return;
+    this._followUpCycleRunning = true;
+    try {
+      for (const c of batch) {
+        const { subject, html } = this.buildFollowUpEmail(c);
+        this.queuePendingSend(c, subject, html, 'seguimiento');
+        c.lastFollowUpAt = now;
+      }
+    } finally {
+      this._followUpCycleRunning = false;
+    }
+    this.saveLocal();
+    this.render();
+    this.notify('AXIOM CORE', `Agente Seguimiento: ${batch.length} recordatorio(s) real(es) esperando tu aprobación`);
+  },
+
+  /** Redacta el recordatorio real de seguimiento, firmado con los datos de
+   * "Tu negocio" igual que el primer contacto, y respetando siempre la baja. */
+  buildFollowUpEmail(c) {
+    const profile = this.getProfile();
+    const business = profile.businessName || 'nuestro equipo';
+    const sender = profile.senderName || business;
+    const needLabel = { Web: 'un sitio web', Ventas: 'una página de ventas', Expandir: 'una automatización' }[c.need] || 'una mejora digital';
+    const context = c.stage === 'demo_enviada'
+      ? `te enviamos hace unos días la demo real de ${needLabel} para ${c.name} y queríamos saber qué te pareció`
+      : `te escribimos hace unos días sobre ${needLabel} para ${c.name} y no hemos tenido noticias tuyas`;
+    const subject = `${business}: ¿seguimos adelante con ${c.name}?`;
+    const html = `<p>Hola,</p>
+      <p>Soy ${sender}${profile.businessName ? ` de ${profile.businessName}` : ''}. ${context}.</p>
+      <p>¿Tendrías unos minutos para comentarlo? Sigo disponible si quieres avanzar o si tienes alguna duda.</p>
+      <p>Un saludo,<br>${sender}</p>
+      <p style="font-size:11px;color:#888;margin-top:18px;">Este mensaje lo envía ${business}${profile.fromEmail ? ` (${profile.fromEmail})` : ''}. Si no quieres que volvamos a escribirte, responde indicándolo y no te contactaremos de nuevo.</p>`;
+    return { subject, html };
+  },
+
+  queuePendingSend(c, subject, html, kind = 'demo') {
     this.store.pendingSends = this.store.pendingSends || [];
-    this.store.pendingSends.push({ id: 'p_' + Date.now() + Math.random(), clientId: c.id, clientName: c.name, subject, html, createdAt: Date.now() });
+    this.store.pendingSends.push({ id: 'p_' + Date.now() + Math.random(), clientId: c.id, clientName: c.name, subject, html, kind, createdAt: Date.now() });
     this.savePendingSends();
   },
 
@@ -457,17 +524,22 @@ const App = {
   /** Repite búsquedas de Google Places guardadas, una por una, sin que el
    * usuario tenga que pulsar "Buscar" — solo mientras el panel esté abierto. */
   async runWatchlist() {
-    if (!this.store.watchlist?.length) return;
+    if (!this.store.watchlist?.length || this._watchlistRunning) return;
     if (!this.connections.getKey('google_places') || !this.backendUrl) return;
-    const now = Date.now();
-    let changed = false;
-    for (const w of this.store.watchlist) {
-      if (now - (w.lastRunAt || 0) < w.intervalMinutes * 60000) continue;
-      w.lastRunAt = now;
-      changed = true;
-      await this.searchLeadsFor(w.sector, w.need, w.location, { silent: true });
+    this._watchlistRunning = true;
+    try {
+      const now = Date.now();
+      let changed = false;
+      for (const w of this.store.watchlist) {
+        if (now - (w.lastRunAt || 0) < w.intervalMinutes * 60000) continue;
+        w.lastRunAt = now;
+        changed = true;
+        await this.searchLeadsFor(w.sector, w.need, w.location, { silent: true });
+      }
+      if (changed) this.saveWatchlist();
+    } finally {
+      this._watchlistRunning = false;
     }
-    if (changed) this.saveWatchlist();
   },
 
   /* --------------------------- Tema claro/oscuro --------------------------- */
@@ -688,21 +760,21 @@ const App = {
       </div>`;
     }).join('')}</div>
     <div class="card" style="margin-top:14px;">
-      <div class="card-header"><span>${Icons.svg('cpu')} Ronda automática (Developer)</span>
+      <div class="card-header"><span>${Icons.svg('cpu')} Ronda automática (Developer + Seguimiento)</span>
         <button class="pill-btn ${enabled ? 'primary' : ''}" onclick="App.toggleAgents()">${Icons.svg(enabled ? 'check' : 'sparkles', 12)} ${enabled ? 'Activos' : 'Activar agentes IA'}</button>
       </div>
       <div style="font-size:0.6rem;color:var(--dim);">${enabled
-        ? 'Cada pocos minutos, mientras esta pestaña esté abierta: genera con Claude la demo real de cada cliente ya contactado que aún no tiene una, y deja el email de entrega en la cola de abajo para que lo apruebes (no envía nada por su cuenta). No hay ejecución en segundo plano: si cierras la pestaña, se detiene.'
-        : 'Desactivados. Al activarlos, gastarán tu clave real de Anthropic para generar demos automáticamente de clientes en etapa "contactado", dejándolas en la cola de abajo para tu aprobación antes de enviarlas.'}</div>
+        ? 'Cada pocos minutos, mientras esta pestaña esté abierta: Developer genera con Claude la demo real de cada cliente ya contactado que aún no tiene una, y Seguimiento detecta clientes parados sin avanzar y prepara un recordatorio real — ambos dejan el envío en la cola de abajo para que lo apruebes, nunca envían nada por su cuenta, y ninguno duplica el trabajo del otro (un cliente con algo ya en la cola no genera un segundo aviso). No hay ejecución en segundo plano: si cierras la pestaña, se detiene.'
+        : 'Desactivados. Al activarlos, Developer gastará tu clave real de Anthropic para generar demos de clientes en etapa "contactado", y Seguimiento usará Resend para preparar recordatorios a clientes parados — ambos dejan sus envíos en la cola de abajo para tu aprobación.'}</div>
     </div>
     <div class="card" style="margin-top:14px;">
       <div class="card-header"><span>${Icons.svg('mail')} Cola de envíos pendientes (${pending.length})</span>
         ${pending.length ? `<button class="pill-btn primary" onclick="App.approveAllPendingSends()">${Icons.svg('check', 12)} Aprobar todo y enviar</button>` : ''}
       </div>
-      ${!pending.length ? `<div class="empty-state">${Icons.svg('mail', 20)}<span>No hay demos generadas por agentes esperando tu aprobación</span></div>` : pending.map(p => `
+      ${!pending.length ? `<div class="empty-state">${Icons.svg('mail', 20)}<span>No hay envíos generados por agentes esperando tu aprobación</span></div>` : pending.map(p => `
         <div class="node-item" style="flex-direction:column;align-items:stretch;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-            <div><strong>${p.clientName}</strong><div style="font-size:0.55rem;color:var(--dim);">${p.subject}</div></div>
+            <div><span class="pill-btn" style="pointer-events:none;padding:1px 6px;font-size:0.5rem;">${Icons.svg(p.kind === 'seguimiento' ? 'bell' : 'flask', 10)} ${p.kind === 'seguimiento' ? 'Seguimiento' : 'Demo'}</span> <strong>${p.clientName}</strong><div style="font-size:0.55rem;color:var(--dim);">${p.subject}</div></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               <button class="pill-btn" onclick="App.togglePendingPreview('${p.id}')">${Icons.svg('flask', 12)} Vista previa</button>
               <button class="pill-btn primary" onclick="App.approvePendingSend('${p.id}')">${Icons.svg('check', 12)} Enviar</button>
