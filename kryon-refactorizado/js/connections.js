@@ -1,9 +1,9 @@
 /**
- * connections.js — Registro de las 11 conexiones externas de AXIOM CORE
+ * connections.js — Registro de las 12 conexiones externas de AXIOM CORE
  * y una cola con prioridad para limitar llamadas API concurrentes.
  *
  * Nota de honestidad: Supabase, Resend, Anthropic, Stripe, Meta, TikTok,
- * LinkedIn, GA4 y Google Places tienen un endpoint de salud real
+ * LinkedIn, GA4, Google Places y Hunter.io tienen un endpoint de salud real
  * implementado (vía backend, o directo al frontend en el caso de
  * Supabase). Google Ads usa OAuth2 con varias credenciales (client
  * id/secret, refresh token) en lugar de una sola clave pegada, así que no
@@ -29,7 +29,8 @@ const CONNECTIONS_REGISTRY = [
   { id: 'google_places', name: 'Google Places (Leads)', color: '#34a853', storageKey: 'axiom_key_google_places', live: true, keyPattern: /^AIza[0-9A-Za-z_-]{35}$/, liveTest: true },
   { id: 'supabase', name: 'Supabase', color: '#3ecf8e', storageKey: 'axiom_supabase_key', live: true, keyPattern: /^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/, liveTest: true },
   { id: 'resend', name: 'Resend', color: '#000000', storageKey: 'axiom_key_resend', live: true, keyPattern: /^re_[A-Za-z0-9_]+$/, liveTest: true },
-  { id: 'anthropic', name: 'Anthropic', color: '#d97757', storageKey: 'axiom_key_anthropic', live: true, keyPattern: /^sk-ant-[A-Za-z0-9_-]+$/, liveTest: true }
+  { id: 'anthropic', name: 'Anthropic', color: '#d97757', storageKey: 'axiom_key_anthropic', live: true, keyPattern: /^sk-ant-[A-Za-z0-9_-]+$/, liveTest: true },
+  { id: 'hunter', name: 'Hunter.io (Emails)', color: '#fc6238', storageKey: 'axiom_key_hunter', live: true, keyPattern: /^[a-zA-Z0-9]{20,}$/, liveTest: true }
 ];
 
 class ConnectionsManager {

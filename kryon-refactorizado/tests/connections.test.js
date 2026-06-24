@@ -61,6 +61,7 @@ describe('ConnectionsManager', () => {
     expect(mgr.supportsLiveTest('google_ads')).toBe(false);
     expect(mgr.supportsLiveTest('ga4')).toBe(true);
     expect(mgr.supportsLiveTest('google_places')).toBe(true);
+    expect(mgr.supportsLiveTest('hunter')).toBe(true);
   });
 
   it('returns the stored key value via getKey', () => {

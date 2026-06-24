@@ -6,10 +6,17 @@
  * Automatización (mientras el panel esté abierto en el navegador):
  * - Vigilancia de leads: repite búsquedas de Google Places guardadas en
  *   `store.watchlist` sin que el usuario tenga que pulsar "Buscar" cada vez.
+ *   Por cada negocio nuevo intenta encontrar su email real (su propia web,
+ *   o Hunter.io de respaldo) y, si lo encuentra, lo convierte en cliente y le
+ *   envía el primer contacto por Resend sin pasar por revisión manual.
+ * - Contacto manual: cuando el negocio se contacta a mano (no por vigilancia)
+ *   y tiene email real detectado, se abre un modal para revisar/editar el
+ *   email antes de enviarlo de verdad — nunca se envía sin que el usuario
+ *   lo confirme en ese camino.
  * - Pagos: al aprobar un cliente se genera solo el enlace de Stripe, y un
  *   ciclo periódico comprueba si ya se pagó para acreditarlo sin clic manual.
- * Ninguna de las dos sigue funcionando con el navegador cerrado: no hay
- * claves guardadas en el servidor, solo en este dispositivo.
+ * Ninguna de estas automatizaciones sigue funcionando con el navegador
+ * cerrado: no hay claves guardadas en el servidor, solo en este dispositivo.
  */
 
 /* ---------------------------- Utilidades ---------------------------- */
@@ -409,7 +416,7 @@ const App = {
     <div class="card"><div class="card-header">${Icons.svg('target')} Negocios detectados (${this.store.opportunities.length})</div>
       <div class="node-list">${this.store.opportunities.map(o => `
         <div class="node-item"><div class="avatar-circle">${this.initials(o.name)}</div>
-          <div style="flex:1;"><strong>${o.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${o.address || o.sector}${o.phone ? ' · ' + o.phone : ''}</div></div>
+          <div style="flex:1;"><strong>${o.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${o.address || o.sector}${o.phone ? ' · ' + o.phone : ''}${o.email ? ' · ' + o.email : ''}</div></div>
           <button class="pill-btn primary" onclick="App.convertOpportunity('${o.id}')">${Icons.svg('check', 12)} Agregar al pipeline</button>
         </div>`).join('') || `<div class="empty-state">${Icons.svg('search', 28)}<span>Sin negocios detectados aún</span></div>`}
       </div></div>
@@ -467,8 +474,8 @@ const App = {
     stripe: 'Pagos',
     meta: 'Marketing', google_ads: 'Marketing', tiktok: 'Marketing', linkedin: 'Marketing', x: 'Marketing',
     ga4: 'Analítica',
-    google_places: 'Leads',
-    supabase: 'Infraestructura', resend: 'Infraestructura',
+    google_places: 'Leads', hunter: 'Leads', resend: 'Leads',
+    supabase: 'Infraestructura',
     anthropic: 'IA'
   },
 
@@ -486,6 +493,7 @@ const App = {
               <div class="conn-status"><span class="connection-dot ${conn.configured ? 'on' : 'off'}"></span>${conn.configured ? 'Configurada' : 'Sin configurar'}${conn.live ? '' : ' · próximamente'}</div>
               ${conn.id === 'ga4' && !conn.configured ? `<div style="font-size:0.55rem;color:var(--dim);margin-bottom:4px;">Pega el JSON de la cuenta de servicio de Google Cloud, añadiendo un campo "property_id" con el ID de tu propiedad GA4</div>` : ''}
               ${conn.id === 'google_places' && !conn.configured ? `<div style="font-size:0.55rem;color:var(--dim);margin-bottom:4px;">Clave de API de Google Cloud con "Places API (New)" activada — se usa para buscar negocios reales en el Pipeline</div>` : ''}
+              ${conn.id === 'hunter' && !conn.configured ? `<div style="font-size:0.55rem;color:var(--dim);margin-bottom:4px;">Opcional: respaldo si no se encuentra el email rastreando la propia web del negocio. Consigue una clave gratis en hunter.io</div>` : ''}
               <div class="conn-input-row">
                 <input type="password" id="conn_input_${conn.id}" placeholder="${conn.configured ? '••••••••' : (conn.id === 'ga4' ? 'Pegar JSON de cuenta de servicio...' : 'Pegar API key...')}">
                 <button class="pill-btn primary" onclick="App.saveConnectionKey('${conn.id}')">${Icons.svg('check', 12)}</button>
@@ -753,8 +761,10 @@ const App = {
       const existingPlaceIds = new Set(this.store.opportunities.map(o => o.placeId).filter(Boolean));
       const newLeads = (data.leads || []).filter(lead => !lead.placeId || !existingPlaceIds.has(lead.placeId));
       for (const lead of newLeads) {
+        lead.email = await this.findEmailFor(lead);
         const opp = this.pipeline.registerOpportunity(lead, sector, need);
         if (this.cloud.connected) await this.cloud.insert('opportunities', opp);
+        if (silent && opp.email) await this.autoContactOpportunity(opp);
       }
       if (newLeads.length) {
         this.saveLocal();
@@ -766,6 +776,121 @@ const App = {
       if (!silent) this.toast('No se pudo contactar con el backend');
       return null;
     }
+  },
+
+  /** Busca un email de contacto real para el negocio: primero rastrea su propia web
+   * (gratis), y si no aparece, usa Hunter.io como respaldo si hay clave configurada.
+   * @returns {Promise<string|null>} */
+  async findEmailFor(lead) {
+    if (!lead.website || !this.backendUrl) return null;
+    try {
+      const r = await fetch(`${this.backendUrl}/api/emails/find`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+        body: JSON.stringify({ website: lead.website, hunterKey: this.connections.getKey('hunter') || undefined })
+      });
+      const data = await r.json();
+      return data.ok ? (data.email || null) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /** Genera el asunto y el HTML del email de primer contacto, firmado con los
+   * datos de "Tu negocio" guardados en Configuración. */
+  buildOutreachEmail(c) {
+    const profile = this.getProfile();
+    const business = profile.businessName || 'nuestro equipo';
+    const sender = profile.senderName || business;
+    const needLabel = { Web: 'un sitio web', Ventas: 'una página de ventas', Expandir: 'una automatización' }[c.need] || 'una mejora digital';
+    const subject = `${business}: una propuesta para ${c.name}`;
+    const html = `<p>Hola,</p>
+      <p>Soy ${sender}${profile.businessName ? ` de ${profile.businessName}` : ''}. Vi que ${c.name} podría beneficiarse de ${needLabel} y quería ponerme en contacto.</p>
+      <p>¿Tendrías 15 minutos esta semana para hablarlo?</p>
+      <p>Un saludo,<br>${sender}</p>`;
+    return { subject, html };
+  },
+
+  /** Envía de verdad el email de primer contacto vía Resend (requiere clave de
+   * Resend configurada y un "Email de envío" de dominio verificado en Resend).
+   * @returns {Promise<boolean>} */
+  async sendOutreachEmail(c, subject, html) {
+    const resendKey = this.connections.getKey('resend');
+    const profile = this.getProfile();
+    if (!resendKey || !profile.fromEmail || !c.email || !this.backendUrl) return false;
+    try {
+      const r = await fetch(`${this.backendUrl}/api/resend/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+        body: JSON.stringify({ key: resendKey, from: profile.fromEmail, to: c.email, subject, html })
+      });
+      const data = await r.json();
+      return !!data.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  /** Modal de revisión/edición del email de primer contacto antes de enviarlo
+   * de verdad — usado en el camino manual (no en la vigilancia automática, que
+   * envía sin revisión según lo decidido por el usuario). */
+  showOutreachModal(c) {
+    const { subject, html } = this.buildOutreachEmail(c);
+    const profile = this.getProfile();
+    const missing = !this.connections.getKey('resend') ? 'Configura tu clave de Resend en Conexiones' : (!profile.fromEmail ? 'Configura tu "Email de envío" en Configuración (Tu negocio)' : '');
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `<div class="modal-card" style="max-width:560px;">
+      <h3>${Icons.svg('mail', 16)} Revisar email antes de enviar</h3>
+      <p><strong>Para:</strong> ${c.email}</p>
+      ${missing ? `<p style="color:var(--gold);">${missing}</p>` : ''}
+      <input id="outreachSubject" value="${subject}">
+      <textarea id="outreachHtml" style="width:100%;height:160px;font-family:monospace;font-size:0.65rem;">${html}</textarea>
+      <div style="display:flex;gap:8px;margin-top:10px;">
+        <button class="pill-btn primary" id="confirmOutreachBtn" ${missing ? 'disabled' : ''}>${Icons.svg('check', 12)} Enviar</button>
+        <button class="pill-btn" id="cancelOutreachBtn">Cancelar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    modal.querySelector('#confirmOutreachBtn').onclick = async () => {
+      const sub = document.getElementById('outreachSubject').value;
+      const htm = document.getElementById('outreachHtml').value;
+      const sent = await this.sendOutreachEmail(c, sub, htm);
+      modal.remove();
+      if (!sent) return this.toast('No se pudo enviar el email');
+      const updated = this.pipeline.contactClient(c.id);
+      if (!updated) return;
+      this.saveLocal();
+      if (this.cloud.connected) this.cloud.update('clients', c.id, { stage: 'contactado' });
+      this.toast(`Email enviado a ${c.name}`);
+      this.renderShell(); this.render();
+    };
+    modal.querySelector('#cancelOutreachBtn').onclick = () => modal.remove();
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+  },
+
+  /** Camino 100% automático (solo vigilancia): convierte la oportunidad en cliente
+   * y envía el email de primer contacto sin pasar por el modal de revisión — tal
+   * y como el usuario pidió explícitamente para el modo de vigilancia automática.
+   * El email enviado es siempre real (Resend); si no hay clave de Resend o "Email
+   * de envío" configurados, simplemente no se envía nada y el negocio se queda
+   * como oportunidad para contactarlo a mano. */
+  async autoContactOpportunity(opp) {
+    const resendKey = this.connections.getKey('resend');
+    const profile = this.getProfile();
+    if (!resendKey || !profile.fromEmail) return;
+    const client = this.pipeline.convertOpportunity(opp.id);
+    if (!client) return;
+    this.saveLocal();
+    if (this.cloud.connected) { await this.cloud.insert('clients', client); await this.cloud.delete('opportunities', opp.id); }
+    const { subject, html } = this.buildOutreachEmail(client);
+    const sent = await this.sendOutreachEmail(client, subject, html);
+    if (!sent) return;
+    const updated = this.pipeline.contactClient(client.id);
+    if (!updated) return;
+    this.saveLocal();
+    if (this.cloud.connected) this.cloud.update('clients', client.id, { stage: 'contactado' });
+    this.notify('AXIOM CORE', `Email automático enviado a ${client.name}`);
   },
 
   /** Convierte un negocio real ya detectado (oportunidad) en cliente del pipeline. */
@@ -813,7 +938,15 @@ const App = {
     const url = localStorage.getItem('axiom_supabase_url') || '';
     const key = localStorage.getItem('axiom_supabase_key') || '';
     const backendUrl = localStorage.getItem('axiom_backend_url') || '';
-    const content = `<h3>${Icons.svg('settings', 16)} Configuración Cloud</h3>
+    const profile = this.getProfile();
+    const content = `<h3>${Icons.svg('settings', 16)} Tu negocio</h3>
+      <p>Se usa para firmar los emails de primer contacto que se envían a los negocios detectados (vía Resend). El "Email de envío" debe ser de un dominio verificado en tu cuenta de Resend.</p>
+      <input id="cfg_profile_business" value="${profile.businessName}" placeholder="Nombre de tu empresa">
+      <input id="cfg_profile_sender" value="${profile.senderName}" placeholder="Tu nombre (firma del email)">
+      <input id="cfg_profile_from" value="${profile.fromEmail}" placeholder="tu@tudominio.com">
+      <button class="pill-btn primary" onclick="App.saveProfile()">${Icons.svg('check', 12)} Guardar negocio</button>
+      <hr style="margin:14px 0;border-color:var(--border);">
+      <h3>${Icons.svg('settings', 16)} Configuración Cloud</h3>
       <p>1. Crea cuenta en supabase.com<br>2. Ve a Settings &gt; API<br>3. Copia URL y anon key</p>
       <input id="cfg_url" value="${url}" placeholder="https://...supabase.co">
       <input id="cfg_key" value="${key}" placeholder="eyJhbGciOi...">
@@ -851,9 +984,29 @@ const App = {
     location.reload();
   },
 
+  /** Datos de quién firma los emails de primer contacto (Resend). Vive solo en
+   * localStorage, igual que las claves de API — nunca se envía al backend salvo
+   * como parte de un envío de email puntual. */
+  getProfile() {
+    let p;
+    try { p = JSON.parse(localStorage.getItem('axiom_profile') || '{}'); } catch { p = {}; }
+    return { businessName: p.businessName || '', senderName: p.senderName || '', fromEmail: p.fromEmail || '' };
+  },
+
+  saveProfile() {
+    const businessName = (document.getElementById('cfg_profile_business')?.value || '').trim();
+    const senderName = (document.getElementById('cfg_profile_sender')?.value || '').trim();
+    const fromEmail = (document.getElementById('cfg_profile_from')?.value || '').trim();
+    localStorage.setItem('axiom_profile', JSON.stringify({ businessName, senderName, fromEmail }));
+    this.toast('Datos de negocio guardados');
+  },
+
   async contactClient(id) {
-    const c = this.pipeline.contactClient(id);
+    const c = this.store.clients.find(x => x.id === id);
     if (!c) return;
+    if (c.email) return this.showOutreachModal(c);
+    const updated = this.pipeline.contactClient(id);
+    if (!updated) return;
     this.saveLocal();
     if (this.cloud.connected) this.cloud.update('clients', id, { stage: 'contactado' });
     this.toast(`${c.name}`);
