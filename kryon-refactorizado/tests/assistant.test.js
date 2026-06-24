@@ -5,10 +5,22 @@ const { AssistantService } = window;
 
 describe('AssistantService', () => {
   it('exposes the tool definitions and system prompt as static getters', () => {
+    const names = AssistantService.tools.map((t) => t.name);
     expect(AssistantService.tools.length).toBeGreaterThan(0);
-    expect(AssistantService.tools.map((t) => t.name)).toContain('get_panel_status');
-    expect(AssistantService.tools.map((t) => t.name)).not.toContain('get_api_key');
+    expect(names).toContain('get_panel_status');
+    expect(names).toContain('set_theme');
+    expect(names).toContain('set_agents_enabled');
+    expect(names).toContain('add_watchlist');
+    expect(names).toContain('remove_watchlist');
+    expect(names).toContain('opt_out_client');
+    expect(names).toContain('switch_project');
+    expect(names).toContain('create_project');
     expect(AssistantService.systemPrompt).toContain('Anthropic/Resend/Stripe');
+  });
+
+  it('never exposes a tool that could read or set an API key/credential', () => {
+    const names = AssistantService.tools.map((t) => t.name);
+    expect(names.some((n) => /key|password|credential/i.test(n))).toBe(false);
   });
 
   describe('send', () => {

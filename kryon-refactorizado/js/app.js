@@ -247,11 +247,13 @@ const App = {
     localStorage.setItem(`axiom_watchlist_${this.store.activeProjectId}`, JSON.stringify(this.store.watchlist || []));
   },
 
-  addWatch() {
-    const sector = document.getElementById('leadSector')?.value || 'Ecommerce';
-    const need = document.getElementById('leadNeed')?.value || 'Web';
-    const location = document.getElementById('leadLocation')?.value.trim();
-    const intervalMinutes = Number(document.getElementById('watchInterval')?.value) || 60;
+  /** Los parámetros son opcionales: el botón manual del panel los omite y se
+   * leen de los inputs del formulario; el asistente los pasa explícitos. */
+  addWatch(sector, need, location, intervalMinutes) {
+    sector = sector || document.getElementById('leadSector')?.value || 'Ecommerce';
+    need = need || document.getElementById('leadNeed')?.value || 'Web';
+    location = (location || document.getElementById('leadLocation')?.value || '').trim();
+    intervalMinutes = Number(intervalMinutes) || Number(document.getElementById('watchInterval')?.value) || 60;
     if (!location) return this.toast('Escribe una ciudad o zona arriba antes de vigilarla');
     this.store.watchlist = this.store.watchlist || [];
     this.store.watchlist.push({ id: 'w_' + Date.now(), sector, need, location, intervalMinutes, lastRunAt: 0 });
@@ -309,7 +311,7 @@ const App = {
       <div class="card-header">${Icons.svg('sparkles')} Asistente
         <button class="pill-btn" style="margin-left:auto;font-size:0.6rem;" onclick="App.clearAssistant()">${Icons.svg('x', 11)} Limpiar</button>
       </div>
-      <p style="font-size:0.6rem;color:var(--dim);">Pídele que consulte el estado del panel o avance el pipeline (contactar, enviar demo, aprobar, cobrar). Puede configurar la URL del backend y los datos del negocio directamente; cualquier email o cobro real sigue pidiendo tu confirmación en su propio modal del panel, igual que si pulsaras el botón a mano. No tiene acceso a tus claves de API.</p>
+      <p style="font-size:0.6rem;color:var(--dim);">Pídele que consulte el estado del panel, avance el pipeline (contactar, enviar demo, aprobar, cobrar) o configure directamente el perfil del negocio, la URL del backend, el tema, los agentes IA, la vigilancia de leads, los proyectos o los opt-outs. Cualquier email o cobro real sigue pidiendo tu confirmación en su propio modal del panel, igual que si pulsaras el botón a mano. Nunca tiene acceso a tus claves de API ni a la contraseña maestra — esas solo se pegan a mano en "Conexiones"/Ajustes.</p>
       <div class="assistant-log" id="assistantLog">${this.assistantMessagesHtml(messages)}</div>
       <div class="conn-input-row">
         <input class="search-input" id="assistantInput" placeholder="${this.assistantBusy ? 'Esperando respuesta...' : 'Escribe tu mensaje...'}" ${this.assistantBusy ? 'disabled' : ''}>
@@ -446,6 +448,48 @@ const App = {
           await this.requestPayment(c.id);
           return { ok: true, message: `Enlace de pago de ${c.name} listo. Si hay email configurado, queda esperando tu aprobación en "Agentes".` };
         }
+        case 'set_theme': {
+          if (input.theme !== 'dark' && input.theme !== 'light') return { error: 'theme debe ser "dark" o "light"' };
+          if ((document.documentElement.getAttribute('data-theme') || 'dark') !== input.theme) this.toggleTheme();
+          return { ok: true, theme: input.theme };
+        }
+        case 'set_agents_enabled': {
+          const desired = !!input.enabled;
+          if (this.store.agentsEnabled !== desired) this.toggleAgents();
+          return { ok: true, agentsEnabled: this.store.agentsEnabled };
+        }
+        case 'add_watchlist': {
+          if (!input.location) return { error: 'Falta la ciudad o zona a vigilar' };
+          this.addWatch(input.sector, input.need, input.location, input.intervalMinutes);
+          return { ok: true, message: `Vigilancia activada en ${input.location}` };
+        }
+        case 'remove_watchlist': {
+          const q = String(input.location || '').trim().toLowerCase();
+          if (!q) return { error: 'Falta la ubicación a quitar de la vigilancia' };
+          const before = (this.store.watchlist || []).length;
+          this.store.watchlist = (this.store.watchlist || []).filter((w) => !w.location.toLowerCase().includes(q));
+          const removed = before - this.store.watchlist.length;
+          if (removed) { this.saveWatchlist(); this.render(); }
+          return { ok: true, removed };
+        }
+        case 'opt_out_client': {
+          const c = this.findClientByName(input.name);
+          if (!c) return { error: 'No encuentro a ese cliente' };
+          if (!c.email) return { error: `${c.name} no tiene email registrado` };
+          this.markOptOut('client', c.id);
+          return { ok: true, message: `${c.name} no volverá a ser contactado.` };
+        }
+        case 'switch_project': {
+          const p = this.findProjectByName(input.name);
+          if (!p) return { error: 'No encuentro ese proyecto' };
+          this.switchProject(p.id);
+          return { ok: true, message: `Proyecto activo: ${p.name}` };
+        }
+        case 'create_project': {
+          if (!input.name) return { error: 'Falta el nombre del proyecto' };
+          const project = this.createProject(input.name);
+          return { ok: true, project };
+        }
         default:
           return { error: `Herramienta desconocida: ${name}` };
       }
@@ -480,6 +524,11 @@ const App = {
         senderName: profile.senderName || null,
         fromEmailConfigured: !!profile.fromEmail
       },
+      theme: document.documentElement.getAttribute('data-theme') || 'dark',
+      agentsEnabled: !!this.store.agentsEnabled,
+      watchlist: (this.store.watchlist || []).map((w) => ({ sector: w.sector, need: w.need, location: w.location, intervalMinutes: w.intervalMinutes })),
+      optOutCount: (this.store.optOuts || []).length,
+      projects: this.store.projects.map((p) => ({ name: p.name, active: p.id === this.store.activeProjectId })),
       clientsByStage: counts,
       totalClients: this.store.clients.length
     };
@@ -1506,13 +1555,29 @@ const App = {
   showNewProjectModal() {
     const name = prompt('Nombre del proyecto:');
     if (!name) return;
+    this.createProject(name);
+  },
+
+  /** Crea un proyecto nuevo sin tocar los existentes (no hay borrado posible por aquí). */
+  createProject(name) {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return null;
     const id = 'p_' + Date.now();
-    this.store.projects.push({ id, name });
+    const project = { id, name: trimmed };
+    this.store.projects.push(project);
     this.store.activeProjectId = id;
-    if (this.cloud.connected) this.cloud.insert('projects', { id, name, created_at: new Date().toISOString() });
+    if (this.cloud.connected) this.cloud.insert('projects', { id, name: trimmed, created_at: new Date().toISOString() });
     this.saveLocal();
     this.renderShell();
     this.render(true);
+    return project;
+  },
+
+  findProjectByName(name) {
+    const q = String(name || '').trim().toLowerCase();
+    if (!q) return null;
+    return this.store.projects.find((p) => p.name.toLowerCase() === q)
+      || this.store.projects.find((p) => p.name.toLowerCase().includes(q));
   },
 
   showConfigModal() {

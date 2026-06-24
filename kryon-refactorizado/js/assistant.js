@@ -7,6 +7,13 @@
  * vive en app.js, reutilizando exactamente las mismas funciones que usan
  * los botones del panel — así el asistente nunca tiene más permisos que el
  * propio usuario pulsando botones a mano.
+ *
+ * Por decisión explícita del usuario: el asistente puede configurar
+ * directamente todo lo que NO sea una clave/credencial (perfil, backend,
+ * tema, agentes, vigilancia, proyectos, opt-outs, pipeline). Las claves de
+ * API y la contraseña maestra quedan fuera a propósito: si viajaran por
+ * esta conversación, pasarían por los servidores de Anthropic y quedarían
+ * guardadas en el historial del chat — eso el usuario lo rechazó.
  */
 const ASSISTANT_TOOLS = [
   {
@@ -60,16 +67,60 @@ const ASSISTANT_TOOLS = [
     name: 'request_payment',
     description: 'Genera/muestra el enlace de cobro de Stripe para un cliente en etapa "aprobado". El email con el enlace queda esperando aprobación manual en la pestaña "Agentes", nunca se envía solo.',
     input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+  },
+  {
+    name: 'set_theme',
+    description: 'Cambia el tema visual del panel.',
+    input_schema: { type: 'object', properties: { theme: { type: 'string', enum: ['dark', 'light'] } }, required: ['theme'] }
+  },
+  {
+    name: 'set_agents_enabled',
+    description: 'Activa o desactiva los Agentes IA autónomos (generan demos automáticamente para clientes en etapa "contactado" y las dejan en cola de aprobación, nunca las envían solas).',
+    input_schema: { type: 'object', properties: { enabled: { type: 'boolean' } }, required: ['enabled'] }
+  },
+  {
+    name: 'add_watchlist',
+    description: 'Activa la vigilancia automática (búsqueda periódica de negocios reales vía Google Places) para un sector/ciudad. Repite la búsqueda sola mientras el panel esté abierto en el navegador.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        location: { type: 'string', description: 'Ciudad o zona, ej. "Madrid".' },
+        sector: { type: 'string', enum: ['Legaltech', 'Salud', 'Ecommerce', 'Restauracion', 'Belleza', 'Inmobiliaria', 'Fitness', 'Hosteleria'] },
+        need: { type: 'string', enum: ['Web', 'Ventas', 'Expandir'] },
+        intervalMinutes: { type: 'number', description: 'Cada cuántos minutos repetir la búsqueda (30, 60, 180 o 1440).' }
+      },
+      required: ['location']
+    }
+  },
+  {
+    name: 'remove_watchlist',
+    description: 'Detiene la vigilancia automática de una ciudad/zona (quita todas las entradas cuya ubicación coincida).',
+    input_schema: { type: 'object', properties: { location: { type: 'string' } }, required: ['location'] }
+  },
+  {
+    name: 'opt_out_client',
+    description: 'Marca un cliente como "no contactar de nuevo" (deja de recibir cualquier email automático).',
+    input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+  },
+  {
+    name: 'switch_project',
+    description: 'Cambia de proyecto activo (cada proyecto tiene su propio pipeline, clientes y apps).',
+    input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+  },
+  {
+    name: 'create_project',
+    description: 'Crea un proyecto nuevo (no borra ni afecta a los proyectos existentes) y lo deja como activo.',
+    input_schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
   }
 ];
 
 const ASSISTANT_SYSTEM_PROMPT = `Eres el asistente integrado en KRYON, un panel de automatización de ventas (prospección, demos con IA, cobros con Stripe).
-Hablas en español, de forma breve y directa. Tienes herramientas para consultar el estado del panel y avanzar el pipeline de clientes.
+Hablas en español, de forma breve y directa. Puedes configurar directamente casi cualquier parte del panel: perfil del negocio, URL del backend, tema visual, agentes IA, vigilancia automática de leads, proyectos y opt-outs de clientes, además de consultar el estado del panel y avanzar el pipeline de clientes.
 Reglas importantes:
 - Nunca inventes datos del negocio del usuario ni de sus clientes: si necesitas saber algo, usa una herramienta para consultarlo primero.
-- No puedes ver ni cambiar claves de API (Anthropic/Resend/Stripe/Google Places): si el usuario pide configurarlas, dile que las pegue él mismo en la pestaña "Conexiones" — tú no tienes acceso a ese campo por seguridad.
+- Nunca puedes ver ni cambiar ninguna clave de API ni credencial (Anthropic/Resend/Stripe/Google Places/Supabase/contraseña maestra): si el usuario pide configurarlas, dile que las pegue él mismo en la pestaña "Conexiones" (o en Ajustes para Supabase/contraseña) — el usuario decidió explícitamente que esas claves nunca pasen por esta conversación, así que rechaza pegarlas aquí aunque el usuario insista.
 - Las acciones que envían un email o generan un cobro real ya abren su propio modal de confirmación dentro del panel: nunca afirmes que algo "ya se envió" solo por haber llamado a la herramienta, espera el resultado.
-- Si el usuario pide algo ambiguo (por ejemplo, no dice qué cliente), pregunta antes de actuar.`;
+- Si el usuario pide algo ambiguo (por ejemplo, no dice qué cliente, proyecto o ubicación), pregunta antes de actuar.`;
 
 class AssistantService {
   /** @param {string} backendUrl */
