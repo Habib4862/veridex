@@ -1140,6 +1140,22 @@ const App = {
     return { subject, html };
   },
 
+  /** Genera el asunto y el HTML del email con el enlace de pago, mismo estilo
+   * de firma que el resto de emails de la marca. */
+  buildPaymentEmail(c, paymentUrl) {
+    const profile = this.getProfile();
+    const business = profile.businessName || 'nuestro equipo';
+    const sender = profile.senderName || business;
+    const subject = `${business}: enlace de pago para ${c.name}`;
+    const html = `<p>Hola,</p>
+      <p>Aquí tienes el enlace para confirmar el pago de tu proyecto (€${(c.budget || 0).toLocaleString()}):</p>
+      <p><a href="${paymentUrl}">${paymentUrl}</a></p>
+      <p>En cuanto se confirme el pago, empezamos con el desarrollo.</p>
+      <p>Un saludo,<br>${sender}</p>
+      <p style="font-size:11px;color:#888;margin-top:18px;">Este mensaje lo envía ${business}${profile.fromEmail ? ` (${profile.fromEmail})` : ''}.</p>`;
+    return { subject, html };
+  },
+
   /** Envía de verdad el email de primer contacto vía Resend (requiere clave de
    * Resend configurada y un "Email de envío" de dominio verificado en Resend).
    * Respeta siempre las bajas reales: si el destinatario pidió no ser
@@ -1465,7 +1481,16 @@ const App = {
       c.paymentSessionId = data.sessionId;
       this.saveLocal();
       if (this.cloud.connected) this.cloud.update('clients', c.id, { payment_url: data.url, payment_session_id: data.sessionId });
-      this.notify('AXIOM CORE', `Enlace de pago listo para ${c.name}`);
+
+      const profile = this.getProfile();
+      const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail) && !this.isOptedOut(c.email);
+      if (canEmail) {
+        const { subject, html } = this.buildPaymentEmail(c, data.url);
+        const sent = await this.sendOutreachEmail(c, subject, html);
+        this.notify('AXIOM CORE', sent ? `Enlace de pago enviado por email a ${c.name}` : `Enlace de pago listo para ${c.name} (el envío automático falló)`);
+      } else {
+        this.notify('AXIOM CORE', `Enlace de pago listo para ${c.name}`);
+      }
     } catch {}
   },
 
@@ -1520,7 +1545,7 @@ const App = {
     modal.className = 'modal-overlay';
     modal.innerHTML = `<div class="modal-card">
       <h3>${Icons.svg('euro', 16)} Cobro a ${c.name}</h3>
-      <p>Envía este enlace al cliente para que pague <strong>€${(c.budget || 0).toLocaleString()}</strong> con tarjeta:</p>
+      <p>Este enlace ya se envió automáticamente por email a ${c.name} para que pague <strong>€${(c.budget || 0).toLocaleString()}</strong> con tarjeta. Aquí lo tienes también por si necesitas copiarlo de nuevo:</p>
       <input id="paymentUrlInput" value="${c.paymentUrl}" readonly>
       <div style="display:flex;gap:8px;margin-top:10px;">
         <button class="pill-btn" id="copyPaymentBtn">${Icons.svg('check', 12)} Copiar enlace</button>
