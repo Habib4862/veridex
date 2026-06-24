@@ -90,7 +90,7 @@ const App = {
   currentTab: 'dashboard',
   store: {
     projects: [], activeProjectId: null,
-    opportunities: [], clients: [], apps: [], logs: [], history: [], watchlist: [], optOuts: [],
+    opportunities: [], clients: [], apps: [], logs: [], history: [], watchlist: [], optOuts: [], marketScans: [],
     portfolio: { total: 0, cash: 0 }
   },
   chart: null, intervals: [], startTime: Date.now(),
@@ -147,6 +147,7 @@ const App = {
   afterLoad() {
     this.loadWatchlist();
     this.loadOptOuts();
+    this.loadMarketScans();
     this.renderShell();
     this.render(true);
     this.startCycles();
@@ -282,6 +283,51 @@ const App = {
     if (this.cloud.connected) this.cloud.update(kind === 'client' ? 'clients' : 'opportunities', id, { optOut: true });
     this.toast(`${item.name} no volverá a ser contactado`);
     this.render();
+  },
+
+  /* --------------------------- Análisis de mercado real --------------------------- */
+
+  /** Convierte los negocios reales que devuelve cada búsqueda de Google
+   * Places en una foto del mercado de ese sector/ciudad: cuántos hay, qué
+   * porcentaje no tiene web (la señal de oportunidad más clara para vender
+   * un sitio web) y su valoración media — todo calculado a partir de datos
+   * reales devueltos en esa misma búsqueda, sin inventar nada. */
+  recordMarketScan(sector, location, leads) {
+    if (!leads.length) return;
+    const total = leads.length;
+    const withoutWebsite = leads.filter(l => !l.website).length;
+    const rated = leads.filter(l => typeof l.rating === 'number');
+    const avgRating = rated.length ? rated.reduce((s, l) => s + l.rating, 0) / rated.length : null;
+    const lowRating = rated.filter(l => l.rating < 4).length;
+    this.store.marketScans = this.store.marketScans || [];
+    this.store.marketScans.unshift({
+      id: 'scan_' + Date.now(), sector, location, total, withoutWebsite, avgRating, lowRating, at: Date.now()
+    });
+    this.store.marketScans = this.store.marketScans.slice(0, 10);
+    this.saveMarketScans();
+  },
+
+  loadMarketScans() {
+    try { this.store.marketScans = JSON.parse(localStorage.getItem(`axiom_marketscans_${this.store.activeProjectId}`) || '[]'); }
+    catch { this.store.marketScans = []; }
+  },
+
+  saveMarketScans() {
+    localStorage.setItem(`axiom_marketscans_${this.store.activeProjectId}`, JSON.stringify(this.store.marketScans || []));
+  },
+
+  marketScanHtml() {
+    const scans = this.store.marketScans || [];
+    if (!scans.length) return `<div class="empty-state">${Icons.svg('activity', 24)}<span>Busca negocios reales arriba para ver el análisis de su mercado</span></div>`;
+    return scans.map(s => {
+      const pctNoWeb = Math.round((s.withoutWebsite / s.total) * 100);
+      const ratingTxt = s.avgRating != null ? `${s.avgRating.toFixed(1)}★ de media (${s.lowRating} con menos de 4★)` : 'sin valoraciones';
+      return `<div class="node-item"><div style="flex:1;">
+        <strong>${s.sector}</strong> en ${s.location} <span style="color:var(--muted);">· ${s.total} negocio(s) reales encontrados, ${new Date(s.at).toLocaleString()}</span>
+        <div style="font-size:0.6rem;color:var(--dim);margin-top:4px;">${pctNoWeb}% no tiene web propia · ${ratingTxt}</div>
+        ${pctNoWeb >= 50 ? `<div style="font-size:0.6rem;color:var(--green);margin-top:2px;">Alta oportunidad: la mayoría no tiene web — prioriza este sector/ciudad</div>` : ''}
+      </div></div>`;
+    }).join('');
   },
 
   /** Repite búsquedas de Google Places guardadas, una por una, sin que el
@@ -430,6 +476,10 @@ const App = {
         <input id="leadLocation" placeholder="Ciudad o zona, ej. Madrid">
         <button class="pill-btn primary" onclick="App.searchLeads()">${Icons.svg('search', 12)} Buscar</button>
       </div>
+    </div>
+    <div class="card"><div class="card-header">${Icons.svg('activity')} Análisis de mercado en tiempo real</div>
+      <p style="font-size:0.6rem;color:var(--dim);">Calculado a partir de los negocios reales que devuelve cada búsqueda de arriba (Google Places): cuántos hay, qué porcentaje no tiene web propia y su valoración media — para que sepas dónde concentrar tus ventas.</p>
+      <div class="node-list">${this.marketScanHtml()}</div>
     </div>
     <div class="card"><div class="card-header">${Icons.svg('activity')} Vigilancia automática (${(this.store.watchlist || []).length})</div>
       <p style="font-size:0.6rem;color:var(--dim);">Repite la búsqueda de arriba sola, cada X tiempo, mientras tengas este panel abierto en el navegador — sin volver a pulsar "Buscar". Si cierras el navegador, se detiene.</p>
@@ -795,6 +845,7 @@ const App = {
       });
       const data = await r.json();
       if (!data.ok) { if (!silent) this.toast(data.error || 'No se pudo buscar negocios'); return null; }
+      this.recordMarketScan(sector, location, data.leads || []);
 
       const existingPlaceIds = new Set(this.store.opportunities.map(o => o.placeId).filter(Boolean));
       const newLeads = (data.leads || []).filter(lead => !lead.placeId || !existingPlaceIds.has(lead.placeId));
@@ -963,6 +1014,7 @@ const App = {
     (this.refreshFromCloud ? this.refreshFromCloud() : Promise.resolve(this.loadLocal())).then(() => {
       this.loadWatchlist();
       this.loadOptOuts();
+      this.loadMarketScans();
       this.renderShell();
       this.render(true);
     });
