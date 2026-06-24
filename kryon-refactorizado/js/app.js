@@ -1024,14 +1024,26 @@ const App = {
     const { app } = result;
     this.saveLocal();
     if (this.cloud.connected) { this.cloud.insert('apps', app); this.cloud.update('clients', id, { stage: 'demo_enviada', demo_id: app.id }); }
-    this.toast('Demo');
+    const profile = this.getProfile();
+    const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail);
+    if (canEmail) {
+      const sender = profile.senderName || profile.businessName || 'nuestro equipo';
+      const subject = `${profile.businessName || sender}: tu demo está lista`;
+      const sent = await this.sendOutreachEmail(c, subject, code);
+      this.toast(sent ? `Demo enviada por email a ${c.name}` : 'Demo guardada, pero el envío por email falló');
+    } else {
+      this.toast('Demo guardada (no se envió por email: usa "Copiar HTML" o configura email del cliente + Resend + tu Email de envío)');
+    }
     this.renderShell(); this.render();
   },
 
-  /** Muestra al usuario el contenido exacto (HTML real) que se le enviaría al cliente
-   * — junto con sus datos (presupuesto, sector) — y espera su confirmación antes de
-   * enviarlo de verdad. @returns {Promise<boolean>} */
+  /** Muestra al usuario el contenido exacto (HTML real) de la demo y, si hay
+   * email del cliente + Resend + "Email de envío" configurados, le avisa de que
+   * al confirmar se le enviará de verdad por correo; si no, le ofrece copiar el
+   * HTML para entregarlo a mano. Nunca afirma que algo se envió si no se envía. */
   confirmSend(c, code) {
+    const profile = this.getProfile();
+    const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail);
     return new Promise((resolve) => {
       const modal = document.createElement('div');
       modal.className = 'modal-overlay';
@@ -1041,11 +1053,14 @@ const App = {
         <strong>Sector:</strong> ${c.sector}<br>
         <strong>Necesidad:</strong> ${c.need || 'general'}<br>
         <strong>Presupuesto:</strong> €${(c.budget || 0).toLocaleString()}</p>
-        <p>Esto es exactamente lo que recibirá el cliente:</p>
-        <div class="browser-frame"><div class="browser-frame-bar"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span><span class="url">demo-${this.slugify(c.name)}.app</span></div>
+        <p>${canEmail
+          ? `Esto es exactamente lo que recibirá ${c.name} por email (${c.email}) al confirmar:`
+          : `Vista previa de la demo. ${c.email ? 'Falta tu clave de Resend o tu "Email de envío" (Configuración → Tu negocio) para poder enviarla de verdad.' : 'No hay un email real detectado para este cliente.'} Puedes copiar el HTML y entregarla a mano.`}</p>
+        <div class="browser-frame"><div class="browser-frame-bar"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span><span class="url">vista previa, no es un enlace real</span></div>
         <iframe id="sendPreviewFrame" sandbox="" style="width:100%;height:260px;border:none;background:#fff;"></iframe></div>
         <div style="display:flex;gap:8px;margin-top:10px;">
-          <button class="pill-btn primary" id="confirmSendBtn">${Icons.svg('check', 12)} Enviar</button>
+          <button class="pill-btn primary" id="confirmSendBtn">${Icons.svg('check', 12)} ${canEmail ? 'Enviar por email' : 'Marcar como enviada'}</button>
+          ${!canEmail ? `<button class="pill-btn" id="copyHtmlBtn">${Icons.svg('check', 12)} Copiar HTML</button>` : ''}
           <button class="pill-btn" id="cancelSendBtn">Cancelar</button>
         </div>
       </div>`;
@@ -1054,6 +1069,10 @@ const App = {
       const cleanup = (val) => { modal.remove(); resolve(val); };
       modal.querySelector('#confirmSendBtn').onclick = () => cleanup(true);
       modal.querySelector('#cancelSendBtn').onclick = () => cleanup(false);
+      modal.querySelector('#copyHtmlBtn')?.addEventListener('click', () => {
+        navigator.clipboard?.writeText(code);
+        this.toast('HTML copiado al portapapeles');
+      });
       modal.addEventListener('click', (e) => { if (e.target === modal) cleanup(false); });
     });
   },
