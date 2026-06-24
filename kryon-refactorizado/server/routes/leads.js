@@ -12,7 +12,12 @@ const router = express.Router();
 const SECTOR_QUERY = {
   Legaltech: 'abogados despacho legal',
   Salud: 'clínica médica dentista',
-  Ecommerce: 'tienda comercio retail'
+  Ecommerce: 'tienda comercio retail',
+  Restauracion: 'restaurante bar cafetería',
+  Belleza: 'peluquería salón de belleza estética',
+  Inmobiliaria: 'inmobiliaria agencia de la propiedad',
+  Fitness: 'gimnasio centro deportivo',
+  Hosteleria: 'hotel alojamiento turístico'
 };
 
 router.post('/search', async (req, res) => {

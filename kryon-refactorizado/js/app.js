@@ -467,6 +467,11 @@ const App = {
           <option value="Legaltech">Legaltech (abogados)</option>
           <option value="Salud">Salud (clínicas)</option>
           <option value="Ecommerce">Ecommerce (comercio)</option>
+          <option value="Restauracion">Restauración (bares, restaurantes)</option>
+          <option value="Belleza">Belleza (peluquerías, estética)</option>
+          <option value="Inmobiliaria">Inmobiliaria</option>
+          <option value="Fitness">Fitness (gimnasios)</option>
+          <option value="Hosteleria">Hostelería (hoteles)</option>
         </select>
         <select id="leadNeed">
           <option value="Web">Sitio web</option>
