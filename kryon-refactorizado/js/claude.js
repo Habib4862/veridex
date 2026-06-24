@@ -1,6 +1,6 @@
 /**
  * claude.js — Creador de entregables para clientes (sitio web, landing de
- * ventas, demo de automatización...). El tipo de entregable se adapta a la
+ * ventas, automatización real y funcional...). El tipo de entregable se adapta a la
  * necesidad del cliente (ver NEED_BRIEFS). Comprime prompts, cachea resultados
  * repetidos y delega la llamada real a Claude en el backend (server/),
  * que es quien guarda la API key. Si no hay backend disponible (modo
@@ -12,8 +12,18 @@
 const NEED_BRIEFS = {
   Web: 'una página web completa y profesional para la empresa, con varias secciones que actúen como páginas reales de un sitio (inicio, servicios, sobre nosotros, contacto) navegables mediante anclas internas',
   Ventas: 'una página de ventas/landing orientada a conversión, con un embudo claro: propuesta de valor, prueba social, oferta concreta y llamadas a la acción potentes para vender el servicio o producto principal del cliente',
-  Expandir: 'una demostración de un sistema o automatización (por ejemplo un flujo de trabajo visual, un panel de seguimiento de procesos o una vista de un sistema interno) que muestre cómo el cliente puede automatizar o escalar su negocio'
+  Expandir: 'una automatización real y funcional para una tarea concreta del día a día de ese negocio (por ejemplo: reserva de citas con detección de solapamientos y exportación a archivo .ics, un generador de presupuestos/facturas con cálculo automático e impresión a PDF, un formulario de captura de leads que guarda los envíos y permite exportarlos a CSV, o un sistema de respuestas automáticas por WhatsApp/email con plantillas predefinidas) — no es una maqueta visual de cómo se vería, es una herramienta que funciona de verdad al abrirla'
 };
+/** Instrucciones extra solo para automatizaciones: aquí es donde más se nota la
+ * diferencia entre "simulación" y "funciona de verdad", así que se exige
+ * explícitamente lógica real en JavaScript, no solo una vista bonita. */
+const AUTOMATION_EXTRA = `Esta automatización tiene que funcionar de verdad dentro de la propia
+  página, sin backend ni claves de API (todo en JavaScript vanilla, sin dependencias externas):
+  elige UNA automatización concreta y útil para el sector y la necesidad descritos, e
+  implementa su lógica real (validaciones de formulario, cálculos, detección de conflictos,
+  guardado en localStorage, generación de archivos descargables como .ics/.csv/.txt mediante
+  Blob y un enlace de descarga, etc.). Todo botón o formulario debe hacer algo real al
+  pulsarlo. No incluyas ningún elemento decorativo que simule una acción sin ejecutarla.`;
 
 class ClaudeService {
   /**
@@ -82,10 +92,12 @@ class ClaudeService {
     const factsBlock = knownFacts
       ? `Datos reales y verificados de la empresa (úsalos exactamente como aparecen, no inventes otros):\n${knownFacts}\n`
       : 'No hay datos de contacto verificados todavía: no inventes dirección, teléfono ni web concretos; usa solo un formulario de contacto o un texto genérico tipo "Contáctanos".\n';
+    const automationBlock = client.need === 'Expandir' ? `${AUTOMATION_EXTRA}\n` : '';
     const rawPrompt = `Eres un diseñador y desarrollador senior especializado en crear entregables
       digitales de la máxima calidad posible. Crea ${brief} para ${client.name}, una empresa del
       sector ${client.sector}.
       ${factsBlock}
+      ${automationBlock}
       Requisitos: una sola página HTML autocontenida con CSS embebido en <style> (sin
       dependencias ni librerías externas), diseño moderno y responsive, tipografía y
       espaciado cuidados, jerarquía visual clara y transiciones/hover sutiles en CSS
