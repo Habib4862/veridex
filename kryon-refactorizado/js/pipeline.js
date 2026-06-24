@@ -70,6 +70,7 @@ class PipelineManager {
       phone: opp.phone || '',
       website: opp.website || '',
       email: opp.email || '',
+      placeId: opp.placeId || '',
       budget: PipelineManager.estimateBudget(opp.need, opp.sector),
       stage: 'nuevo',
       project_id: this.store.activeProjectId
