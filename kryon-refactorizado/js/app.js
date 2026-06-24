@@ -1,7 +1,15 @@
 /**
  * app.js — Controlador principal de KRYON. Orquesta brain.js, supabase.js,
  * connections.js, agents.js, pipeline.js, healer.js y claude.js; gestiona
- * el DOM, persistencia, autenticación y el modo autónomo.
+ * el DOM, persistencia y autenticación.
+ *
+ * Automatización (mientras el panel esté abierto en el navegador):
+ * - Vigilancia de leads: repite búsquedas de Google Places guardadas en
+ *   `store.watchlist` sin que el usuario tenga que pulsar "Buscar" cada vez.
+ * - Pagos: al aprobar un cliente se genera solo el enlace de Stripe, y un
+ *   ciclo periódico comprueba si ya se pagó para acreditarlo sin clic manual.
+ * Ninguna de las dos sigue funcionando con el navegador cerrado: no hay
+ * claves guardadas en el servidor, solo en este dispositivo.
  */
 
 /* ---------------------------- Utilidades ---------------------------- */
@@ -75,7 +83,7 @@ const App = {
   currentTab: 'dashboard',
   store: {
     projects: [], activeProjectId: null,
-    opportunities: [], clients: [], apps: [], logs: [], history: [],
+    opportunities: [], clients: [], apps: [], logs: [], history: [], watchlist: [],
     portfolio: { total: 0, cash: 0 }
   },
   chart: null, intervals: [], startTime: Date.now(),
@@ -132,6 +140,7 @@ const App = {
 
   afterLoad() {
     this.agentsManager.load(this.store.activeProjectId);
+    this.loadWatchlist();
     this.renderShell();
     this.render(true);
     this.startCycles();
@@ -196,9 +205,59 @@ const App = {
 
   startCycles() {
     this.intervals.push(setInterval(() => this.autoBackup(), 300000));
+    this.intervals.push(setInterval(() => this.autoCheckPayments(), 120000));
+    this.intervals.push(setInterval(() => this.runWatchlist(), 300000));
+    this.runWatchlist();
   },
 
   clearIntervals() { this.intervals.forEach(clearInterval); this.intervals = []; },
+
+  /* ------------------------- Vigilancia automática ------------------------- */
+
+  loadWatchlist() {
+    try { this.store.watchlist = JSON.parse(localStorage.getItem(`axiom_watchlist_${this.store.activeProjectId}`) || '[]'); }
+    catch { this.store.watchlist = []; }
+  },
+
+  saveWatchlist() {
+    localStorage.setItem(`axiom_watchlist_${this.store.activeProjectId}`, JSON.stringify(this.store.watchlist || []));
+  },
+
+  addWatch() {
+    const sector = document.getElementById('leadSector')?.value || 'Ecommerce';
+    const need = document.getElementById('leadNeed')?.value || 'Web';
+    const location = document.getElementById('leadLocation')?.value.trim();
+    const intervalMinutes = Number(document.getElementById('watchInterval')?.value) || 60;
+    if (!location) return this.toast('Escribe una ciudad o zona arriba antes de vigilarla');
+    this.store.watchlist = this.store.watchlist || [];
+    this.store.watchlist.push({ id: 'w_' + Date.now(), sector, need, location, intervalMinutes, lastRunAt: 0 });
+    this.saveWatchlist();
+    this.toast(`Vigilancia activada: ${sector} en ${location}`);
+    this.render();
+    this.runWatchlist();
+  },
+
+  removeWatch(id) {
+    this.store.watchlist = (this.store.watchlist || []).filter(w => w.id !== id);
+    this.saveWatchlist();
+    this.render();
+  },
+
+  /** Repite búsquedas de Google Places guardadas, una por una, sin que el
+   * usuario tenga que pulsar "Buscar" — solo mientras el panel esté abierto. */
+  async runWatchlist() {
+    if (!this.store.watchlist?.length) return;
+    if (!this.connections.getKey('google_places') || !this.backendUrl) return;
+    const now = Date.now();
+    let changed = false;
+    for (const w of this.store.watchlist) {
+      if (now - (w.lastRunAt || 0) < w.intervalMinutes * 60000) continue;
+      w.lastRunAt = now;
+      changed = true;
+      await this.searchLeadsFor(w.sector, w.need, w.location, { silent: true });
+    }
+    if (changed) this.saveWatchlist();
+  },
 
   /* --------------------------- Tema claro/oscuro --------------------------- */
   applyStoredTheme() {
@@ -331,6 +390,22 @@ const App = {
         <button class="pill-btn primary" onclick="App.searchLeads()">${Icons.svg('search', 12)} Buscar</button>
       </div>
     </div>
+    <div class="card"><div class="card-header">${Icons.svg('activity')} Vigilancia automática (${(this.store.watchlist || []).length})</div>
+      <p style="font-size:0.6rem;color:var(--dim);">Repite la búsqueda de arriba sola, cada X tiempo, mientras tengas este panel abierto en el navegador — sin volver a pulsar "Buscar". Si cierras el navegador, se detiene.</p>
+      <div class="conn-input-row" style="flex-wrap:wrap;">
+        <select id="watchInterval">
+          <option value="30">Cada 30 min</option>
+          <option value="60" selected>Cada hora</option>
+          <option value="180">Cada 3 horas</option>
+          <option value="1440">Cada día</option>
+        </select>
+        <button class="pill-btn primary" onclick="App.addWatch()">${Icons.svg('plus', 12)} Vigilar sector/ciudad de arriba</button>
+      </div>
+      <div class="node-list">${(this.store.watchlist || []).map(w => `
+        <div class="node-item"><div style="flex:1;"><strong>${w.sector}</strong> en ${w.location} <span style="color:var(--muted);">· ${w.intervalMinutes >= 1440 ? `cada ${w.intervalMinutes / 1440}d` : `cada ${w.intervalMinutes}min`}</span></div>
+          <button class="pill-btn" onclick="App.removeWatch('${w.id}')">${Icons.svg('x', 12)}</button>
+        </div>`).join('') || `<div class="empty-state">${Icons.svg('activity', 24)}<span>Sin vigilancia activa</span></div>`}
+      </div></div>
     <div class="card"><div class="card-header">${Icons.svg('target')} Negocios detectados (${this.store.opportunities.length})</div>
       <div class="node-list">${this.store.opportunities.map(o => `
         <div class="node-item"><div class="avatar-circle">${this.initials(o.name)}</div>
@@ -653,11 +728,19 @@ const App = {
     const need = document.getElementById('leadNeed')?.value || 'Web';
     const location = document.getElementById('leadLocation')?.value.trim();
     if (!location) return this.toast('Escribe una ciudad o zona');
-    const key = this.connections.getKey('google_places');
-    if (!key) return this.toast('Configura tu clave de Google Places en Conexiones primero');
+    if (!this.connections.getKey('google_places')) return this.toast('Configura tu clave de Google Places en Conexiones primero');
     if (!this.backendUrl) return this.toast('Configura la URL del backend en Ajustes primero');
 
     this.toast('Buscando negocios reales...');
+    const count = await this.searchLeadsFor(sector, need, location);
+    if (count === null) return;
+    this.toast(count ? `${count} negocio(s) encontrado(s)` : 'Sin negocios nuevos en esa zona');
+  },
+
+  /** Lógica compartida por el botón "Buscar" manual y por la vigilancia automática. */
+  async searchLeadsFor(sector, need, location, { silent = false } = {}) {
+    const key = this.connections.getKey('google_places');
+    if (!key || !this.backendUrl) return null;
     try {
       const r = await fetch(`${this.backendUrl}/api/leads/search`, {
         method: 'POST',
@@ -665,7 +748,7 @@ const App = {
         body: JSON.stringify({ key, sector, location })
       });
       const data = await r.json();
-      if (!data.ok) return this.toast(data.error || 'No se pudo buscar negocios');
+      if (!data.ok) { if (!silent) this.toast(data.error || 'No se pudo buscar negocios'); return null; }
 
       const existingPlaceIds = new Set(this.store.opportunities.map(o => o.placeId).filter(Boolean));
       const newLeads = (data.leads || []).filter(lead => !lead.placeId || !existingPlaceIds.has(lead.placeId));
@@ -673,11 +756,15 @@ const App = {
         const opp = this.pipeline.registerOpportunity(lead, sector, need);
         if (this.cloud.connected) await this.cloud.insert('opportunities', opp);
       }
-      this.saveLocal();
-      this.toast(newLeads.length ? `${newLeads.length} negocio(s) encontrado(s)` : 'Sin negocios nuevos en esa zona');
-      if (['dashboard', 'pipeline'].includes(this.currentTab)) this.render();
+      if (newLeads.length) {
+        this.saveLocal();
+        if (silent) this.notify('AXIOM CORE', `Vigilancia automática: ${newLeads.length} negocio(s) nuevo(s) en ${location}`);
+        if (['dashboard', 'pipeline'].includes(this.currentTab)) this.render();
+      }
+      return newLeads.length;
     } catch {
-      this.toast('No se pudo contactar con el backend');
+      if (!silent) this.toast('No se pudo contactar con el backend');
+      return null;
     }
   },
 
@@ -704,6 +791,7 @@ const App = {
     this.store.activeProjectId = id;
     (this.refreshFromCloud ? this.refreshFromCloud() : Promise.resolve(this.loadLocal())).then(() => {
       this.agentsManager.load(this.store.activeProjectId);
+      this.loadWatchlist();
       this.renderShell();
       this.render(true);
     });
@@ -823,30 +911,15 @@ const App = {
     this.saveLocal();
     if (this.cloud.connected) this.cloud.update('clients', id, { stage: 'aprobado' });
     this.renderShell(); this.render();
+    this.autoCreatePaymentLink(c);
   },
 
-  async completeProduct(id) {
-    const c = this.pipeline.completeProduct(id);
-    if (!c) return;
-    this.saveLocal();
-    if (this.cloud.connected) this.cloud.update('clients', id, { stage: 'completado' });
-    this.toast(`€${c.budget}`);
-    this.notify('AXIOM CORE', `${c.name} completó su producto (+€${c.budget})`);
-    this.renderShell(); this.render();
-  },
-
-  /** Genera un enlace de pago real de Stripe Checkout para el presupuesto del cliente.
-   * Si ya existe uno pendiente, vuelve a mostrarlo en vez de crear otro. */
-  async requestPayment(id) {
-    const c = this.store.clients.find(x => x.id === id);
-    if (!c || c.stage !== 'aprobado') return;
+  /** Genera el enlace de cobro real de Stripe en cuanto el cliente queda aprobado,
+   * sin esperar a que el usuario pulse "Cobrar" — solo crea el enlace, no cobra nada solo. */
+  async autoCreatePaymentLink(c) {
+    if (c.paymentUrl) return;
     const stripeKey = this.connections.getKey('stripe');
-    if (!stripeKey) return this.toast('Configura tu clave de Stripe en Conexiones primero');
-    if (!this.backendUrl) return this.toast('Configura la URL del backend en Ajustes primero');
-
-    if (c.paymentUrl) return this.showPaymentModal(c);
-
-    this.toast('Generando enlace de pago...');
+    if (!stripeKey || !this.backendUrl) return;
     try {
       const r = await fetch(`${this.backendUrl}/api/stripe/create-payment-link`, {
         method: 'POST',
@@ -860,15 +933,58 @@ const App = {
         })
       });
       const data = await r.json();
-      if (!data.ok) return this.toast(data.error || 'No se pudo crear el enlace de pago');
+      if (!data.ok) return;
       c.paymentUrl = data.url;
       c.paymentSessionId = data.sessionId;
       this.saveLocal();
-      if (this.cloud.connected) this.cloud.update('clients', id, { payment_url: data.url, payment_session_id: data.sessionId });
-      this.showPaymentModal(c);
-    } catch {
-      this.toast('No se pudo contactar con el backend');
+      if (this.cloud.connected) this.cloud.update('clients', c.id, { payment_url: data.url, payment_session_id: data.sessionId });
+      this.notify('AXIOM CORE', `Enlace de pago listo para ${c.name}`);
+    } catch {}
+  },
+
+  /** Comprueba en Stripe, cada 2 minutos, si algún cliente aprobado ya pagó su
+   * enlace, y acredita el dinero automáticamente sin clic manual. */
+  async autoCheckPayments() {
+    const stripeKey = this.connections.getKey('stripe');
+    if (!stripeKey || !this.backendUrl) return;
+    const pending = this.store.clients.filter(c => c.stage === 'aprobado' && c.paymentSessionId);
+    for (const c of pending) {
+      try {
+        const r = await fetch(`${this.backendUrl}/api/stripe/check-payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+          body: JSON.stringify({ key: stripeKey, sessionId: c.paymentSessionId })
+        });
+        const data = await r.json();
+        if (data.ok && data.paid) await this.completeProduct(c.id);
+      } catch {}
     }
+  },
+
+  async completeProduct(id) {
+    const c = this.pipeline.completeProduct(id);
+    if (!c) return;
+    this.saveLocal();
+    if (this.cloud.connected) this.cloud.update('clients', id, { stage: 'completado' });
+    this.toast(`€${c.budget}`);
+    this.notify('AXIOM CORE', `${c.name} completó su producto (+€${c.budget})`);
+    this.renderShell(); this.render();
+  },
+
+  /** Muestra el enlace de pago real de Stripe Checkout del cliente; si la generación
+   * automática al aprobarlo aún no terminó (o falló), lo crea aquí mismo. */
+  async requestPayment(id) {
+    const c = this.store.clients.find(x => x.id === id);
+    if (!c || c.stage !== 'aprobado') return;
+    if (!this.connections.getKey('stripe')) return this.toast('Configura tu clave de Stripe en Conexiones primero');
+    if (!this.backendUrl) return this.toast('Configura la URL del backend en Ajustes primero');
+
+    if (!c.paymentUrl) {
+      this.toast('Generando enlace de pago...');
+      await this.autoCreatePaymentLink(c);
+      if (!c.paymentUrl) return this.toast('No se pudo crear el enlace de pago');
+    }
+    this.showPaymentModal(c);
   },
 
   /** Muestra el enlace de pago generado y permite verificar en vivo si Stripe ya lo cobró. */
