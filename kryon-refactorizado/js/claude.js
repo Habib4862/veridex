@@ -70,16 +70,33 @@ class ClaudeService {
     if (!anthropicKey) return this._localTemplate(client);
 
     const brief = NEED_BRIEFS[client.need] || 'una demo de la máxima calidad posible para presentar el negocio del cliente';
+    // Datos reales ya verificados (scraping de Google Places / web del negocio): si
+    // existen hay que usarlos tal cual, en vez de dejar que el modelo invente otros —
+    // el cliente real verá ese contacto reflejado en su propio entregable.
+    const knownFacts = [
+      client.address && `Dirección real: ${client.address}`,
+      client.phone && `Teléfono real: ${client.phone}`,
+      client.website && `Web real: ${client.website}`,
+      client.email && `Email real: ${client.email}`
+    ].filter(Boolean).join('\n');
+    const factsBlock = knownFacts
+      ? `Datos reales y verificados de la empresa (úsalos exactamente como aparecen, no inventes otros):\n${knownFacts}\n`
+      : 'No hay datos de contacto verificados todavía: no inventes dirección, teléfono ni web concretos; usa solo un formulario de contacto o un texto genérico tipo "Contáctanos".\n';
     const rawPrompt = `Eres un diseñador y desarrollador senior especializado en crear entregables
       digitales de la máxima calidad posible. Crea ${brief} para ${client.name}, una empresa del
       sector ${client.sector}.
+      ${factsBlock}
       Requisitos: una sola página HTML autocontenida con CSS embebido en <style> (sin
-      dependencias externas), diseño moderno y responsive, tipografía y espaciado
-      cuidados, y contenido específico y realista para ese sector y necesidad (nada
-      de texto genérico tipo "Lorem ipsum"). Incluye cabecera con el nombre de la
-      empresa y una propuesta de valor clara. Este entregable es lo primero que verá
-      el cliente potencial, así que debe causar la mejor impresión profesional posible
-      y ajustarse exactamente al tipo de necesidad descrito arriba.
+      dependencias ni librerías externas), diseño moderno y responsive, tipografía y
+      espaciado cuidados, jerarquía visual clara y transiciones/hover sutiles en CSS
+      donde aporten. No uses URLs de imágenes externas ni placeholders rotos: si
+      quieres elementos visuales, créalos con CSS/SVG inline (gradientes, formas,
+      iconos simples). Contenido específico y realista para ese sector y necesidad
+      (nada de texto genérico tipo "Lorem ipsum"). Incluye cabecera con el nombre de
+      la empresa y una propuesta de valor clara, y usa los datos reales de contacto
+      indicados arriba si existen. Este entregable es lo primero que verá el cliente
+      potencial, así que debe causar la mejor impresión profesional posible y
+      ajustarse exactamente al tipo de necesidad descrito arriba.
       Devuelve únicamente el HTML, sin explicaciones.`;
     const prompt = this.compressPrompt(rawPrompt);
     const cacheKey = `${anthropicKey}|${prompt}`;
