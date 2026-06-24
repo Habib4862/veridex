@@ -78,6 +78,7 @@ class PipelineManager {
       rating: typeof opp.rating === 'number' ? opp.rating : null,
       budget: PipelineManager.estimateBudget(opp.need, opp.sector),
       stage: 'nuevo',
+      stageChangedAt: Date.now(),
       project_id: this.store.activeProjectId
     };
   }
@@ -88,6 +89,7 @@ class PipelineManager {
     const c = this.store.clients.find(x => x.id === id);
     if (!c) return null;
     c.stage = 'contactado';
+    c.stageChangedAt = Date.now();
     this._log(`${c.name} contactado`);
     return c;
   }
@@ -99,6 +101,7 @@ class PipelineManager {
     const app = { id: 'a_' + Date.now(), name: `${label} ${c.sector}`, code: code || `<h1>Demo para ${c.name}</h1>`, status: 'demo', clientId: c.id, project_id: this.store.activeProjectId };
     this.store.apps.unshift(app);
     c.stage = 'demo_enviada';
+    c.stageChangedAt = Date.now();
     c.demoId = app.id;
     this._log('Demo enviada');
     return { client: c, app };
@@ -108,6 +111,7 @@ class PipelineManager {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'demo_enviada') return null;
     c.stage = 'aprobado';
+    c.stageChangedAt = Date.now();
     this._log(`${c.name} aprobó`);
     return c;
   }
@@ -116,6 +120,7 @@ class PipelineManager {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'aprobado') return null;
     c.stage = 'completado';
+    c.stageChangedAt = Date.now();
     this.store.portfolio.cash += c.budget;
     this.store.portfolio.total += c.budget;
     this._log(`+€${c.budget} cobrado`);
