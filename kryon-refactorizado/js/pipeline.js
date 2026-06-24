@@ -56,6 +56,7 @@ class PipelineManager {
       website: lead.website || '',
       email: lead.email || '',
       placeId: lead.placeId || '',
+      rating: typeof lead.rating === 'number' ? lead.rating : null,
       sector,
       need,
       project_id: this.store.activeProjectId
@@ -74,6 +75,7 @@ class PipelineManager {
       website: opp.website || '',
       email: opp.email || '',
       placeId: opp.placeId || '',
+      rating: typeof opp.rating === 'number' ? opp.rating : null,
       budget: PipelineManager.estimateBudget(opp.need, opp.sector),
       stage: 'nuevo',
       project_id: this.store.activeProjectId

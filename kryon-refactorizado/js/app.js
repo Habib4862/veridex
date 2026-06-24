@@ -1123,10 +1123,11 @@ const App = {
   async sendDemo(id) {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'contactado') return;
-    const code = await this.claude.generateAppCode(c, this.connections.getKey('anthropic'));
-    const confirmed = await this.confirmSend(c, code);
-    if (!confirmed) return;
-    const result = this.pipeline.sendDemo(id, code);
+    const anthropicKey = this.connections.getKey('anthropic');
+    const code = await this.claude.generateAppCode(c, anthropicKey);
+    const finalCode = await this.confirmSend(c, code, anthropicKey);
+    if (!finalCode) return;
+    const result = this.pipeline.sendDemo(id, finalCode);
     if (!result) return;
     const { app } = result;
     this.saveLocal();
@@ -1136,7 +1137,7 @@ const App = {
     if (canEmail) {
       const sender = profile.senderName || profile.businessName || 'nuestro equipo';
       const subject = `${profile.businessName || sender}: tu demo está lista`;
-      const sent = await this.sendOutreachEmail(c, subject, code);
+      const sent = await this.sendOutreachEmail(c, subject, finalCode);
       this.toast(sent ? `Demo enviada por email a ${c.name}` : 'Demo guardada, pero el envío por email falló');
     } else {
       this.toast('Demo guardada (no se envió por email: usa "Copiar HTML" o configura email del cliente + Resend + tu Email de envío)');
@@ -1147,8 +1148,11 @@ const App = {
   /** Muestra al usuario el contenido exacto (HTML real) de la demo y, si hay
    * email del cliente + Resend + "Email de envío" configurados, le avisa de que
    * al confirmar se le enviará de verdad por correo; si no, le ofrece copiar el
-   * HTML para entregarlo a mano. Nunca afirma que algo se envió si no se envía. */
-  confirmSend(c, code) {
+   * HTML para entregarlo a mano. Nunca afirma que algo se envió si no se envía.
+   * Si hay clave de Anthropic, ofrece "Regenerar": pide una generación nueva de
+   * verdad (no la cacheada) cuando el primer resultado no convence.
+   * @returns {Promise<string|false>} el HTML final a usar (puede ser el regenerado), o false si se cancela */
+  confirmSend(c, code, anthropicKey) {
     const profile = this.getProfile();
     const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail);
     return new Promise((resolve) => {
@@ -1165,20 +1169,35 @@ const App = {
           : `Vista previa de la demo. ${c.email ? 'Falta tu clave de Resend o tu "Email de envío" (Configuración → Tu negocio) para poder enviarla de verdad.' : 'No hay un email real detectado para este cliente.'} Puedes copiar el HTML y entregarla a mano.`}</p>
         <div class="browser-frame"><div class="browser-frame-bar"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span><span class="url">vista previa, no es un enlace real</span></div>
         <iframe id="sendPreviewFrame" sandbox="" style="width:100%;height:260px;border:none;background:#fff;"></iframe></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
+        <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
           <button class="pill-btn primary" id="confirmSendBtn">${Icons.svg('check', 12)} ${canEmail ? 'Enviar por email' : 'Marcar como enviada'}</button>
+          ${anthropicKey ? `<button class="pill-btn" id="regenBtn">${Icons.svg('flask', 12)} Regenerar con IA</button>` : ''}
           ${!canEmail ? `<button class="pill-btn" id="copyHtmlBtn">${Icons.svg('check', 12)} Copiar HTML</button>` : ''}
           <button class="pill-btn" id="cancelSendBtn">Cancelar</button>
         </div>
       </div>`;
       document.body.appendChild(modal);
-      modal.querySelector('#sendPreviewFrame').srcdoc = code;
+      let currentCode = code;
+      const frame = modal.querySelector('#sendPreviewFrame');
+      frame.srcdoc = currentCode;
       const cleanup = (val) => { modal.remove(); resolve(val); };
-      modal.querySelector('#confirmSendBtn').onclick = () => cleanup(true);
+      modal.querySelector('#confirmSendBtn').onclick = () => cleanup(currentCode);
       modal.querySelector('#cancelSendBtn').onclick = () => cleanup(false);
       modal.querySelector('#copyHtmlBtn')?.addEventListener('click', () => {
-        navigator.clipboard?.writeText(code);
+        navigator.clipboard?.writeText(currentCode);
         this.toast('HTML copiado al portapapeles');
+      });
+      modal.querySelector('#regenBtn')?.addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        btn.textContent = 'Generando otra versión...';
+        try {
+          currentCode = await this.claude.regenerateAppCode(c, anthropicKey);
+          frame.srcdoc = currentCode;
+        } finally {
+          btn.disabled = false;
+          btn.innerHTML = `${Icons.svg('flask', 12)} Regenerar con IA`;
+        }
       });
       modal.addEventListener('click', (e) => { if (e.target === modal) cleanup(false); });
     });
