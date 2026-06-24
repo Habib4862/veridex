@@ -414,7 +414,7 @@ const App = {
     const sent = await this.sendOutreachEmail(c, item.subject, item.html);
     this.store.pendingSends = this.store.pendingSends.filter(p => p.id !== id);
     this.savePendingSends();
-    this.toast(sent ? `Demo enviada por email a ${c.name}` : `No se pudo enviar a ${c.name} (revisa Resend/Email de envío)`);
+    this.toast(sent ? `Email enviado a ${c.name}` : `No se pudo enviar a ${c.name} (revisa Resend/Email de envío)`);
     this.render();
   },
 
@@ -430,7 +430,7 @@ const App = {
       this.store.pendingSends = this.store.pendingSends.filter(p => p.id !== item.id);
     }
     this.savePendingSends();
-    this.toast(`${ok}/${items.length} demo(s) enviada(s) por email`);
+    this.toast(`${ok}/${items.length} email(s) enviado(s)`);
     this.render();
   },
 
@@ -779,7 +779,7 @@ const App = {
       ${!pending.length ? `<div class="empty-state">${Icons.svg('mail', 20)}<span>No hay envíos generados por agentes esperando tu aprobación</span></div>` : pending.map(p => `
         <div class="node-item" style="flex-direction:column;align-items:stretch;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
-            <div><span class="pill-btn" style="pointer-events:none;padding:1px 6px;font-size:0.5rem;">${Icons.svg(p.kind === 'seguimiento' ? 'bell' : 'flask', 10)} ${p.kind === 'seguimiento' ? 'Seguimiento' : 'Demo'}</span> <strong>${p.clientName}</strong><div style="font-size:0.55rem;color:var(--dim);">${p.subject}</div></div>
+            <div><span class="pill-btn" style="pointer-events:none;padding:1px 6px;font-size:0.5rem;">${Icons.svg(p.kind === 'seguimiento' ? 'bell' : p.kind === 'pago' ? 'euro' : 'flask', 10)} ${p.kind === 'seguimiento' ? 'Seguimiento' : p.kind === 'pago' ? 'Pago' : 'Demo'}</span> <strong>${p.clientName}</strong><div style="font-size:0.55rem;color:var(--dim);">${p.subject}</div></div>
             <div style="display:flex;gap:6px;flex-wrap:wrap;">
               <button class="pill-btn" onclick="App.togglePendingPreview('${p.id}')">${Icons.svg('flask', 12)} Vista previa</button>
               <button class="pill-btn primary" onclick="App.approvePendingSend('${p.id}')">${Icons.svg('check', 12)} Enviar</button>
@@ -1486,8 +1486,9 @@ const App = {
       const canEmail = !!(c.email && this.connections.getKey('resend') && profile.fromEmail) && !this.isOptedOut(c.email);
       if (canEmail) {
         const { subject, html } = this.buildPaymentEmail(c, data.url);
-        const sent = await this.sendOutreachEmail(c, subject, html);
-        this.notify('AXIOM CORE', sent ? `Enlace de pago enviado por email a ${c.name}` : `Enlace de pago listo para ${c.name} (el envío automático falló)`);
+        this.queuePendingSend(c, subject, html, 'pago');
+        this.render();
+        this.notify('AXIOM CORE', `Enlace de pago listo para ${c.name} · esperando tu aprobación en "Agentes"`);
       } else {
         this.notify('AXIOM CORE', `Enlace de pago listo para ${c.name}`);
       }
@@ -1545,7 +1546,7 @@ const App = {
     modal.className = 'modal-overlay';
     modal.innerHTML = `<div class="modal-card">
       <h3>${Icons.svg('euro', 16)} Cobro a ${c.name}</h3>
-      <p>Este enlace ya se envió automáticamente por email a ${c.name} para que pague <strong>€${(c.budget || 0).toLocaleString()}</strong> con tarjeta. Aquí lo tienes también por si necesitas copiarlo de nuevo:</p>
+      <p>El email con este enlace está esperando tu aprobación en la pestaña "Agentes" → cola de envíos pendientes. Aquí lo tienes también por si quieres copiarlo y enviarlo a mano:</p>
       <input id="paymentUrlInput" value="${c.paymentUrl}" readonly>
       <div style="display:flex;gap:8px;margin-top:10px;">
         <button class="pill-btn" id="copyPaymentBtn">${Icons.svg('check', 12)} Copiar enlace</button>
