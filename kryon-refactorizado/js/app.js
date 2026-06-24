@@ -390,6 +390,15 @@ const App = {
     return { subject, html };
   },
 
+  /** Un iframe con srcdoc hereda la URL base de la propia página del panel, así que
+   * un enlace tipo href="/" dentro de una demo navegaría al panel real (vercel.json
+   * sirve index.html para cualquier ruta). Se inyecta un guardia que bloquea toda
+   * navegación de enlaces/formularios dentro de la vista previa, sin tocar el resto del HTML. */
+  safePreviewHtml(code = '') {
+    const guard = '<script>document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("a");if(a)e.preventDefault();},true);document.addEventListener("submit",function(e){e.preventDefault();},true);</' + 'script>';
+    return /<\/body>/i.test(code) ? code.replace(/<\/body>/i, guard + '</body>') : code + guard;
+  },
+
   queuePendingSend(c, subject, html, kind = 'demo') {
     this.store.pendingSends = this.store.pendingSends || [];
     this.store.pendingSends.push({ id: 'p_' + Date.now() + Math.random(), clientId: c.id, clientName: c.name, subject, html, kind, createdAt: Date.now() });
@@ -401,7 +410,7 @@ const App = {
     const item = (this.store.pendingSends || []).find(p => p.id === id);
     if (!el || !item) return;
     const show = el.style.display === 'none' || !el.style.display;
-    if (show && !el.dataset.loaded) { el.srcdoc = item.html; el.dataset.loaded = '1'; }
+    if (show && !el.dataset.loaded) { el.srcdoc = this.safePreviewHtml(item.html); el.dataset.loaded = '1'; }
     el.style.display = show ? 'block' : 'none';
   },
 
@@ -909,7 +918,7 @@ const App = {
   refreshEditorPreview() {
     const code = document.getElementById('codeEditor')?.value || '';
     const preview = document.getElementById('editorPreview');
-    if (preview) preview.innerHTML = `<iframe srcdoc="${code.replace(/"/g, '&quot;')}" style="width:100%;height:100%;border:none;"></iframe>`;
+    if (preview) preview.innerHTML = `<iframe srcdoc="${this.safePreviewHtml(code).replace(/"/g, '&quot;')}" style="width:100%;height:100%;border:none;"></iframe>`;
   },
 
   healthIcons: {
@@ -1024,7 +1033,7 @@ const App = {
   preview(id) {
     const app = this.store.apps.find(a => a.id === id);
     if (!app) return;
-    document.getElementById('previewArea').innerHTML = `<iframe srcdoc="${(app.code || '').replace(/"/g, '&quot;')}" style="width:100%;height:100%;border:none;"></iframe>`;
+    document.getElementById('previewArea').innerHTML = `<iframe srcdoc="${this.safePreviewHtml(app.code || '').replace(/"/g, '&quot;')}" style="width:100%;height:100%;border:none;"></iframe>`;
     const urlEl = document.getElementById('previewUrl');
     if (urlEl) urlEl.textContent = `kryon-demo.app/${this.slugify(app.name)}`;
   },
@@ -1413,7 +1422,7 @@ const App = {
           ? `Esto es exactamente lo que recibirá ${c.name} por email (${c.email}) al confirmar:`
           : `Vista previa de la demo. ${c.email ? 'Falta tu clave de Resend o tu "Email de envío" (Configuración → Tu negocio) para poder enviarla de verdad.' : 'No hay un email real detectado para este cliente.'} Puedes copiar el HTML y entregarla a mano.`}</p>
         <div class="browser-frame"><div class="browser-frame-bar"><span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span><span class="url">vista previa, no es un enlace real</span></div>
-        <iframe id="sendPreviewFrame" sandbox="" style="width:100%;height:260px;border:none;background:#fff;"></iframe></div>
+        <iframe id="sendPreviewFrame" sandbox="allow-scripts" style="width:100%;height:260px;border:none;background:#fff;"></iframe></div>
         <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
           <button class="pill-btn primary" id="confirmSendBtn">${Icons.svg('check', 12)} ${canEmail ? 'Enviar por email' : 'Marcar como enviada'}</button>
           ${anthropicKey ? `<button class="pill-btn" id="regenBtn">${Icons.svg('flask', 12)} Regenerar con IA</button>` : ''}
@@ -1424,7 +1433,7 @@ const App = {
       document.body.appendChild(modal);
       let currentCode = code;
       const frame = modal.querySelector('#sendPreviewFrame');
-      frame.srcdoc = currentCode;
+      frame.srcdoc = this.safePreviewHtml(currentCode);
       const cleanup = (val) => { modal.remove(); resolve(val); };
       modal.querySelector('#confirmSendBtn').onclick = () => cleanup(currentCode);
       modal.querySelector('#cancelSendBtn').onclick = () => cleanup(false);
@@ -1438,7 +1447,7 @@ const App = {
         btn.textContent = 'Generando otra versión...';
         try {
           currentCode = await this.claude.regenerateAppCode(c, anthropicKey);
-          frame.srcdoc = currentCode;
+          frame.srcdoc = this.safePreviewHtml(currentCode);
         } finally {
           btn.disabled = false;
           btn.innerHTML = `${Icons.svg('flask', 12)} Regenerar con IA`;
