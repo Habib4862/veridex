@@ -112,6 +112,22 @@ modo:
    integraciones server-to-server o para servir el panel sin exponer la
    anon key.
 
+#### Modo de un solo puerto (local rápido o entornos como bolt.new)
+
+`server/server.js` también sirve el frontend estático (no solo `/api/*`),
+así que en sitios donde solo hay un puerto expuesto (o para no levantar dos
+procesos a mano) basta con:
+
+```bash
+cd server && npm install && cd ..
+npm run dev
+```
+
+Y abrir `http://localhost:3001` — ahí está el panel completo. En el panel,
+pon esa misma URL (o la que te dé el preview del entorno) como "URL del
+backend" en Ajustes. En producción (Vercel) este modo nunca se activa:
+`vercel.json` ya sirve los estáticos por su cuenta.
+
 ### Opción C — App de escritorio (Electron)
 
 KRYON también puede correr como app nativa de PC (Windows/Mac/Linux), con
