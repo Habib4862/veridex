@@ -26,7 +26,7 @@ const NEED_LABELS = { Web: 'Sitio web', Ventas: 'Página de ventas', Expandir: '
 class PipelineManager {
   /**
    * @param {object} store referencia mutable { clients, opportunities, portfolio, apps }
-   * @param {object} hooks { onXp(agentId, amount), onLog(msg), onPersist() }
+   * @param {object} hooks { onLog(msg), onPersist() }
    */
   constructor(store, hooks = {}) {
     this.store = store;
@@ -76,14 +76,12 @@ class PipelineManager {
     };
   }
 
-  _xp(agentId, amount) { this.hooks.onXp?.(agentId, amount); }
   _log(msg) { this.hooks.onLog?.(msg); }
 
   contactClient(id) {
     const c = this.store.clients.find(x => x.id === id);
     if (!c) return null;
     c.stage = 'contactado';
-    this._xp('clientes', 10);
     this._log(`${c.name} contactado`);
     return c;
   }
@@ -96,7 +94,6 @@ class PipelineManager {
     this.store.apps.unshift(app);
     c.stage = 'demo_enviada';
     c.demoId = app.id;
-    this._xp('developer', 15);
     this._log('Demo enviada');
     return { client: c, app };
   }
@@ -105,7 +102,6 @@ class PipelineManager {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'demo_enviada') return null;
     c.stage = 'aprobado';
-    this._xp('clientes', 20);
     this._log(`${c.name} aprobó`);
     return c;
   }
@@ -116,18 +112,16 @@ class PipelineManager {
     c.stage = 'completado';
     this.store.portfolio.cash += c.budget;
     this.store.portfolio.total += c.budget;
-    this._xp('finanzas', 25);
     this._log(`+€${c.budget} cobrado`);
     return c;
   }
 
-  /** Registra un negocio real recién encontrado como oportunidad, otorgando XP al
-   * agente de detección. Llamado por App tras una búsqueda de leads exitosa. */
+  /** Registra un negocio real recién encontrado como oportunidad. Llamado por
+   * App tras una búsqueda de leads exitosa. */
   registerOpportunity(lead, sector, need) {
     const opp = this.leadToOpportunity(lead, sector, need);
     this.store.opportunities.unshift(opp);
     if (this.store.opportunities.length > 20) this.store.opportunities.pop();
-    this._xp('oportunidad', 5);
     this._log(`Negocio real detectado: ${opp.name}`);
     return opp;
   }
@@ -141,7 +135,6 @@ class PipelineManager {
     const client = this.opportunityToClient(opp);
     this.store.clients.unshift(client);
     this.store.opportunities = this.store.opportunities.filter(o => o.id !== opportunityId);
-    this._xp('marketing', 5);
     this._log(`${client.name} añadido al pipeline`);
     return client;
   }

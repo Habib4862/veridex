@@ -1,49 +1,43 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import '../js/agents.js';
 
 const { AgentsManager, AGENT_DEFS } = window;
 
-describe('AgentsManager', () => {
-  beforeEach(() => localStorage.clear());
+function fakeConnections(configuredIds) {
+  return { isConfigured: (id) => configuredIds.includes(id) };
+}
 
-  it('starts every agent at level 1 with 0 xp', () => {
+describe('AgentsManager', () => {
+  it('exposes every defined specialist with its real role', () => {
     const mgr = new AgentsManager();
     expect(mgr.agents).toHaveLength(AGENT_DEFS.length);
-    mgr.agents.forEach(a => { expect(a.level).toBe(1); expect(a.xp).toBe(0); });
+    mgr.agents.forEach(a => { expect(a.role).toBeTruthy(); });
   });
 
-  it('grants xp and reports a level-up when crossing 100xp', () => {
+  it('an agent without a required integration is always operational', () => {
     const mgr = new AgentsManager();
-    expect(mgr.grantXp('marketing', 50)).toBe(false);
-    expect(mgr.grantXp('marketing', 60)).toBe(true);
-    expect(mgr.get('marketing').level).toBe(2);
+    expect(mgr.isOperational('clientes', fakeConnections([]))).toBe(true);
+    expect(mgr.isOperational('legal', fakeConnections([]))).toBe(true);
+  });
+
+  it('an agent that requires an integration is only operational once it is configured', () => {
+    const mgr = new AgentsManager();
+    expect(mgr.isOperational('developer', fakeConnections([]))).toBe(false);
+    expect(mgr.isOperational('developer', fakeConnections(['anthropic']))).toBe(true);
+    expect(mgr.isOperational('finanzas', fakeConnections(['anthropic']))).toBe(false);
   });
 
   it('returns false for an unknown agent id', () => {
     const mgr = new AgentsManager();
-    expect(mgr.grantXp('inexistente', 100)).toBe(false);
+    expect(mgr.isOperational('inexistente', fakeConnections(['anthropic']))).toBe(false);
   });
 
-  it('persists and reloads xp/level per project', () => {
+  it('computes the operational ratio across all agents', () => {
     const mgr = new AgentsManager();
-    mgr.grantXp('developer', 250);
-    mgr.save('proj1');
-
-    const reloaded = new AgentsManager();
-    reloaded.load('proj1');
-    expect(reloaded.get('developer').xp).toBe(250);
-    expect(reloaded.get('developer').level).toBe(3);
-  });
-
-  it('falls back to defaults when there is nothing saved for a project', () => {
-    const mgr = new AgentsManager();
-    mgr.load('proyecto-nuevo');
-    expect(mgr.get('legal').xp).toBe(0);
-  });
-
-  it('computes xpProgress as the remainder within the current level', () => {
-    const mgr = new AgentsManager();
-    mgr.grantXp('finanzas', 130);
-    expect(mgr.xpProgress(mgr.get('finanzas'))).toBe(30);
+    const requiring = mgr.agents.filter(a => a.requires).map(a => a.requires);
+    const ratioNone = mgr.operationalRatio(fakeConnections([]));
+    const ratioAll = mgr.operationalRatio(fakeConnections(requiring));
+    expect(ratioAll).toBe(1);
+    expect(ratioNone).toBeLessThan(ratioAll);
   });
 });
