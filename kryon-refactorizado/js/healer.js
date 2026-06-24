@@ -64,7 +64,7 @@ class HealerService {
     const totalClients = (store.clients || []).length || 1;
     return {
       'Cerebro': brainHealthy ? 100 : 40,
-      'Agentes': agentsManager ? Math.min(100, Math.round((agentsManager.averageLevel() / 5) * 100)) : 50,
+      'Agentes': agentsManager ? Math.round(agentsManager.operationalRatio(connectionsManager) * 100) : 50,
       'Pipeline': Math.round(100 - (stuckClients / totalClients) * 40),
       'Detección': Math.min(100, (store.opportunities || []).length * 10),
       'Persistencia': this._hasLocalStorage() ? 100 : 0,

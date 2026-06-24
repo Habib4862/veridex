@@ -5,6 +5,10 @@ import '../js/pipeline.js';
 
 const { AgentsManager, HealerService, PipelineManager } = window;
 
+function fakeConnections(configuredIds) {
+  return { isConfigured: (id) => configuredIds.includes(id), configuredRatio: () => 0.5 };
+}
+
 describe('Integración pipeline + agentes + sanación', () => {
   let store, agentsManager, healer, pipeline;
 
@@ -18,12 +22,11 @@ describe('Integración pipeline + agentes + sanación', () => {
     agentsManager = new AgentsManager();
     healer = new HealerService();
     pipeline = new PipelineManager(store, {
-      onXp: (agentId, amount) => agentsManager.grantXp(agentId, amount),
       onLog: (msg) => store.logs.unshift({ time: Date.now(), msg, level: 'info' })
     });
   });
 
-  it('completing a full sales cycle levels up agents and logs every step', () => {
+  it('completing a full sales cycle logs every real step without granting any fake xp', () => {
     store.clients.push({ id: 'c1', name: 'Ana', sector: 'Salud', budget: 5000, stage: 'nuevo' });
 
     pipeline.contactClient('c1');
@@ -33,9 +36,6 @@ describe('Integración pipeline + agentes + sanación', () => {
 
     expect(store.clients[0].stage).toBe('completado');
     expect(store.portfolio.cash).toBe(5000);
-    expect(agentsManager.get('clientes').xp).toBe(30); // contact(10) + approve(20)
-    expect(agentsManager.get('developer').xp).toBe(15);
-    expect(agentsManager.get('finanzas').xp).toBe(25);
     expect(store.logs.length).toBe(4);
   });
 
@@ -55,7 +55,7 @@ describe('Integración pipeline + agentes + sanación', () => {
     expect(store.portfolio.returns).toBe(0);
   });
 
-  it('health report reflects pipeline progress and agent growth together', () => {
+  it('health report reflects pipeline progress and real agent operational status together', () => {
     store.clients.push({ id: 'c1', name: 'Lucia', sector: 'Legaltech', budget: 3000, stage: 'nuevo' });
     pipeline.contactClient('c1');
     pipeline.sendDemo('c1');
@@ -63,9 +63,11 @@ describe('Integración pipeline + agentes + sanación', () => {
     pipeline.completeProduct('c1');
     pipeline.registerOpportunity({ name: 'Negocio Real' }, 'Ecommerce', 'Web');
 
-    const report = healer.healthReport(store, { brainHealthy: true, agentsManager, lastBackupAt: Date.now() });
+    const connections = fakeConnections(['anthropic', 'stripe', 'google_places', 'resend']);
+    const report = healer.healthReport(store, { brainHealthy: true, agentsManager, connectionsManager: connections, lastBackupAt: Date.now() });
     expect(report['Pipeline']).toBe(100); // único cliente, ya completado
     expect(report['Detección']).toBeGreaterThan(0);
     expect(report['Backup']).toBe(100);
+    expect(report['Agentes']).toBe(100); // todos los agentes requeridos están conectados
   });
 });

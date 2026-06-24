@@ -61,10 +61,9 @@ describe('PipelineManager — leads reales', () => {
 
 describe('PipelineManager — embudo de ventas', () => {
   it('walks a client through nuevo -> contactado -> demo_enviada -> aprobado -> completado', () => {
-    const onXp = vi.fn();
     const onLog = vi.fn();
     const store = makeStore({ clients: [{ id: 'c1', name: 'Ana', sector: 'Salud', budget: 3000, stage: 'nuevo' }] });
-    const pm = new PipelineManager(store, { onXp, onLog });
+    const pm = new PipelineManager(store, { onLog });
 
     pm.contactClient('c1');
     expect(store.clients[0].stage).toBe('contactado');
@@ -80,11 +79,6 @@ describe('PipelineManager — embudo de ventas', () => {
     pm.completeProduct('c1');
     expect(store.clients[0].stage).toBe('completado');
     expect(store.portfolio.cash).toBe(before + 3000);
-
-    expect(onXp).toHaveBeenCalledWith('clientes', 10);
-    expect(onXp).toHaveBeenCalledWith('developer', 15);
-    expect(onXp).toHaveBeenCalledWith('clientes', 20);
-    expect(onXp).toHaveBeenCalledWith('finanzas', 25);
     expect(onLog).toHaveBeenCalled();
   });
 

@@ -110,7 +110,6 @@ const App = {
     this.masterPassword = localStorage.getItem('axiom_master_pass') || '';
     this.claude.setAuthPassword(this.masterPassword);
     this.pipeline = new PipelineManager(this.store, {
-      onXp: (agentId, amount) => this.agentsManager.grantXp(agentId, amount),
       onLog: (msg) => this.addLog(msg, 'info')
     });
 
@@ -146,7 +145,6 @@ const App = {
   },
 
   afterLoad() {
-    this.agentsManager.load(this.store.activeProjectId);
     this.loadWatchlist();
     this.renderShell();
     this.render(true);
@@ -196,7 +194,6 @@ const App = {
       opps: this.store.opportunities, clients: this.store.clients, apps: this.store.apps,
       portfolio: this.store.portfolio, logs: this.store.logs
     }));
-    this.agentsManager.save(this.store.activeProjectId);
   },
 
   loadHistory() {
@@ -462,12 +459,14 @@ const App = {
   },
 
   renderAgents(c) {
-    c.innerHTML = `<div class="grid grid-3">${this.agentsManager.agents.map(a => `
-      <div class="card">
-        <div class="agent-card-head"><div class="agent-avatar">${Icons.svg(a.icon, 17)}</div><div><div class="agent-name">${a.name}</div><span class="agent-level">Nv.${a.level}</span></div></div>
-        <div style="font-size:0.55rem;color:var(--dim);">${a.xp} XP</div>
-        <div class="xp-bar"><div class="xp-fill" style="width:${this.agentsManager.xpProgress(a)}%;"></div></div>
-      </div>`).join('')}</div>`;
+    c.innerHTML = `<div class="grid grid-3">${this.agentsManager.agents.map(a => {
+      const operational = this.agentsManager.isOperational(a.id, this.connections);
+      return `<div class="card">
+        <div class="agent-card-head"><div class="agent-avatar">${Icons.svg(a.icon, 17)}</div><div><div class="agent-name">${a.name}</div>
+          <span class="connection-dot ${operational ? 'on' : 'off'}"></span> <span style="font-size:0.55rem;color:var(--dim);">${operational ? 'Operativo' : 'Falta conectar ' + (CONNECTIONS_REGISTRY.find(x => x.id === a.requires)?.name || a.requires)}</span></div></div>
+        <div style="font-size:0.6rem;color:var(--dim);margin-top:6px;">${a.role}</div>
+      </div>`;
+    }).join('')}</div>`;
   },
 
   connectionCategories: {
@@ -915,7 +914,6 @@ const App = {
   switchProject(id) {
     this.store.activeProjectId = id;
     (this.refreshFromCloud ? this.refreshFromCloud() : Promise.resolve(this.loadLocal())).then(() => {
-      this.agentsManager.load(this.store.activeProjectId);
       this.loadWatchlist();
       this.renderShell();
       this.render(true);
