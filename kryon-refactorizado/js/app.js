@@ -76,9 +76,9 @@ const App = {
   store: {
     projects: [], activeProjectId: null,
     opportunities: [], clients: [], apps: [], logs: [], history: [],
-    portfolio: { total: 25000, cash: 10000, invested: 15000, returns: 0 }
+    portfolio: { total: 0, cash: 0 }
   },
-  chart: null, autoMode: false, intervals: [], startTime: Date.now(),
+  chart: null, intervals: [], startTime: Date.now(),
   backendUrl: '',
   lastBackupAt: 0,
 
@@ -154,7 +154,6 @@ const App = {
     if (portfolios.length) this.store.portfolio = portfolios[0].data || this.store.portfolio;
     this.loadHistory();
     this.healer.repair(this.store);
-    if (this.store.clients.length === 0) { for (let i = 0; i < 3; i++) { this.store.clients.push(this.pipeline.generateClient()); this.store.opportunities.push(this.pipeline.generateOpp()); } }
   },
 
   loadLocal() {
@@ -173,7 +172,6 @@ const App = {
     } catch { this.store.opportunities = []; this.store.clients = []; this.store.apps = []; }
     this.loadHistory();
     this.healer.repair(this.store);
-    if (this.store.clients.length === 0) { for (let i = 0; i < 3; i++) { this.store.clients.push(this.pipeline.generateClient()); this.store.opportunities.push(this.pipeline.generateOpp()); } }
   },
 
   saveLocal() {
@@ -197,12 +195,7 @@ const App = {
   },
 
   startCycles() {
-    this.intervals.push(setInterval(() => this.autoScan(), 20000));
-    this.intervals.push(setInterval(() => this.autoFindClients(), 25000));
-    this.intervals.push(setInterval(() => this.pipeline.updateInvestments(), 30000));
     this.intervals.push(setInterval(() => this.autoBackup(), 300000));
-    this.autoScan();
-    this.autoFindClients();
   },
 
   clearIntervals() { this.intervals.forEach(clearInterval); this.intervals = []; },
@@ -237,11 +230,8 @@ const App = {
         <div class="logo"><div class="logo-icon">K</div><div class="logo-text">AXIOM <span>CORE</span></div></div>
         <div class="header-actions">
           <span class="token-badge" style="color:${this.cloud.connected ? 'var(--green)' : 'var(--orange)'};">${Icons.svg(this.cloud.connected ? 'cloud' : 'database', 11)} ${this.cloud.connected ? 'Cloud' : 'Local'}</span>
-          <span class="token-badge">${Icons.svg('euro', 11)} €${this.store.portfolio.total?.toLocaleString?.() || '25,000'}</span>
+          <span class="token-badge">${Icons.svg('euro', 11)} €${(this.store.portfolio.total || 0).toLocaleString()}</span>
           <div class="project-selector"><select id="projectSelect" onchange="App.switchProject(this.value)">${opts}</select><button onclick="App.showNewProjectModal()" title="Nuevo proyecto">${Icons.svg('plus', 12)}</button></div>
-          <button class="pill-btn gold" onclick="App.runSalesCycle()">${Icons.svg('pipeline', 13)} Pipeline</button>
-          <button class="pill-btn primary" onclick="App.analyzeInvestment()">${Icons.svg('coins', 13)} Invertir</button>
-          <button class="pill-btn" id="autoBtn" onclick="App.toggleAuto()" title="Activar/desactivar ciclo automático">${this.autoMode ? '<span class="live-dot"></span>' : Icons.svg('activity', 13)} Auto: ${this.autoMode ? 'ON' : 'OFF'}</button>
           <button class="pill-btn" onclick="App.exportPDF()">${Icons.svg('download', 13)} PDF</button>
           <button class="pill-btn" onclick="App.requestPush()" title="Activar notificaciones push">${Icons.svg('bell', 13)}</button>
           <button class="theme-toggle" onclick="App.toggleTheme()" title="Cambiar tema">${Icons.svg(theme === 'dark' ? 'sun' : 'moon', 14)}</button>
@@ -307,7 +297,7 @@ const App = {
         <div class="card accent-cyan"><div class="card-header">${Icons.svg('target')} Oport</div><div class="metric-value">${this.store.opportunities.length}</div></div>
         <div class="card accent-purple"><div class="card-header">${Icons.svg('target')} Clientes</div><div class="metric-value">${this.store.clients.length}</div></div>
         <div class="card accent-green"><div class="card-header">${Icons.svg('wrench')} Apps</div><div class="metric-value">${this.store.apps.length}</div></div>
-        <div class="card accent-gold"><div class="card-header">${Icons.svg('euro')} Cartera</div><div class="metric-value">€${(this.store.portfolio.total || 25000).toLocaleString()}</div></div>
+        <div class="card accent-gold"><div class="card-header">${Icons.svg('euro')} Cobrado</div><div class="metric-value">€${(this.store.portfolio.total || 0).toLocaleString()}</div></div>
       </div>
       <div class="grid grid-2">
         <div class="card"><div class="card-header">${Icons.svg('dashboard')} Evolución <button class="pill-btn" style="font-size:0.6rem;" onclick="App.toggleCompare()">Comparar proyectos</button></div><div class="chart-container"><canvas id="mainChart"></canvas></div><div id="compareArea"></div></div>
@@ -324,7 +314,31 @@ const App = {
   },
 
   renderPipeline(c) {
-    c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('pipeline')} Pipeline <button class="pill-btn primary" onclick="App.runSalesCycle()">${Icons.svg('check', 12)} Ejecutar</button></div>
+    c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('search')} Buscar negocios reales</div>
+      <p style="font-size:0.6rem;color:var(--dim);">Busca negocios locales reales (vía Google Places) para añadirlos como clientes potenciales — sin datos inventados.</p>
+      <div class="conn-input-row" style="flex-wrap:wrap;">
+        <select id="leadSector">
+          <option value="Legaltech">Legaltech (abogados)</option>
+          <option value="Salud">Salud (clínicas)</option>
+          <option value="Ecommerce">Ecommerce (comercio)</option>
+        </select>
+        <select id="leadNeed">
+          <option value="Web">Sitio web</option>
+          <option value="Ventas">Página de ventas</option>
+          <option value="Expandir">Automatización</option>
+        </select>
+        <input id="leadLocation" placeholder="Ciudad o zona, ej. Madrid">
+        <button class="pill-btn primary" onclick="App.searchLeads()">${Icons.svg('search', 12)} Buscar</button>
+      </div>
+    </div>
+    <div class="card"><div class="card-header">${Icons.svg('target')} Negocios detectados (${this.store.opportunities.length})</div>
+      <div class="node-list">${this.store.opportunities.map(o => `
+        <div class="node-item"><div class="avatar-circle">${this.initials(o.name)}</div>
+          <div style="flex:1;"><strong>${o.name}</strong><div style="font-size:0.6rem;color:var(--muted);">${o.address || o.sector}${o.phone ? ' · ' + o.phone : ''}</div></div>
+          <button class="pill-btn primary" onclick="App.convertOpportunity('${o.id}')">${Icons.svg('check', 12)} Agregar al pipeline</button>
+        </div>`).join('') || `<div class="empty-state">${Icons.svg('search', 28)}<span>Sin negocios detectados aún</span></div>`}
+      </div></div>
+    <div class="card"><div class="card-header">${Icons.svg('pipeline')} Pipeline</div>
       <div class="node-list">${this.store.clients.map(cl => `
         <div class="node-item"><div class="avatar-circle">${this.initials(cl.name)}</div>
           <div style="flex:1;"><strong>${cl.name}</strong> · ${cl.sector} · €${cl.budget}${this.stageTrackHtml(cl.stage)}</div>
@@ -378,13 +392,14 @@ const App = {
     stripe: 'Pagos',
     meta: 'Marketing', google_ads: 'Marketing', tiktok: 'Marketing', linkedin: 'Marketing', x: 'Marketing',
     ga4: 'Analítica',
+    google_places: 'Leads',
     supabase: 'Infraestructura', resend: 'Infraestructura',
     anthropic: 'IA'
   },
 
   renderConnections(c) {
     const list = this.connections.list();
-    const categories = ['Pagos', 'Marketing', 'Analítica', 'Infraestructura', 'IA'];
+    const categories = ['Pagos', 'Marketing', 'Leads', 'Analítica', 'Infraestructura', 'IA'];
     c.innerHTML = `<div class="card"><div class="card-header">${Icons.svg('cloud')} Conexiones (${list.filter(x => x.configured).length}/${list.length})</div>
       ${categories.map(cat => {
         const items = list.filter(conn => this.connectionCategories[conn.id] === cat);
@@ -395,6 +410,7 @@ const App = {
               <div class="card-header" style="color:${conn.color};"><span class="conn-badge" style="background:${conn.color};color:${this.contrastColor(conn.color)};">${this.initials(conn.name)}</span>${conn.name}</div>
               <div class="conn-status"><span class="connection-dot ${conn.configured ? 'on' : 'off'}"></span>${conn.configured ? 'Configurada' : 'Sin configurar'}${conn.live ? '' : ' · próximamente'}</div>
               ${conn.id === 'ga4' && !conn.configured ? `<div style="font-size:0.55rem;color:var(--dim);margin-bottom:4px;">Pega el JSON de la cuenta de servicio de Google Cloud, añadiendo un campo "property_id" con el ID de tu propiedad GA4</div>` : ''}
+              ${conn.id === 'google_places' && !conn.configured ? `<div style="font-size:0.55rem;color:var(--dim);margin-bottom:4px;">Clave de API de Google Cloud con "Places API (New)" activada — se usa para buscar negocios reales en el Pipeline</div>` : ''}
               <div class="conn-input-row">
                 <input type="password" id="conn_input_${conn.id}" placeholder="${conn.configured ? '••••••••' : (conn.id === 'ga4' ? 'Pegar JSON de cuenta de servicio...' : 'Pegar API key...')}">
                 <button class="pill-btn primary" onclick="App.saveConnectionKey('${conn.id}')">${Icons.svg('check', 12)}</button>
@@ -630,18 +646,49 @@ const App = {
     setTimeout(() => { t.classList.add('hide'); setTimeout(() => t.remove(), 300); }, 2500);
   },
 
-  async autoScan() {
-    const opp = this.pipeline.autoScan();
-    if (this.cloud.connected) await this.cloud.insert('opportunities', opp);
-    this.saveLocal();
-    if (this.currentTab === 'dashboard') this.render();
+  /** Busca negocios reales (Google Places) según el sector/necesidad/ubicación elegidos
+   * y los registra como oportunidades — sin generar ningún dato inventado. */
+  async searchLeads() {
+    const sector = document.getElementById('leadSector')?.value || 'Ecommerce';
+    const need = document.getElementById('leadNeed')?.value || 'Web';
+    const location = document.getElementById('leadLocation')?.value.trim();
+    if (!location) return this.toast('Escribe una ciudad o zona');
+    const key = this.connections.getKey('google_places');
+    if (!key) return this.toast('Configura tu clave de Google Places en Conexiones primero');
+    if (!this.backendUrl) return this.toast('Configura la URL del backend en Ajustes primero');
+
+    this.toast('Buscando negocios reales...');
+    try {
+      const r = await fetch(`${this.backendUrl}/api/leads/search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-password': this.masterPassword },
+        body: JSON.stringify({ key, sector, location })
+      });
+      const data = await r.json();
+      if (!data.ok) return this.toast(data.error || 'No se pudo buscar negocios');
+
+      const existingPlaceIds = new Set(this.store.opportunities.map(o => o.placeId).filter(Boolean));
+      const newLeads = (data.leads || []).filter(lead => !lead.placeId || !existingPlaceIds.has(lead.placeId));
+      for (const lead of newLeads) {
+        const opp = this.pipeline.registerOpportunity(lead, sector, need);
+        if (this.cloud.connected) await this.cloud.insert('opportunities', opp);
+      }
+      this.saveLocal();
+      this.toast(newLeads.length ? `${newLeads.length} negocio(s) encontrado(s)` : 'Sin negocios nuevos en esa zona');
+      if (['dashboard', 'pipeline'].includes(this.currentTab)) this.render();
+    } catch {
+      this.toast('No se pudo contactar con el backend');
+    }
   },
 
-  async autoFindClients() {
-    const client = this.pipeline.autoFindClients();
-    if (this.cloud.connected) await this.cloud.insert('clients', client);
+  /** Convierte un negocio real ya detectado (oportunidad) en cliente del pipeline. */
+  async convertOpportunity(id) {
+    const client = this.pipeline.convertOpportunity(id);
+    if (!client) return;
     this.saveLocal();
-    if (['dashboard', 'pipeline', 'clients'].includes(this.currentTab)) this.render();
+    if (this.cloud.connected) { await this.cloud.insert('clients', client); await this.cloud.delete('opportunities', id); }
+    this.toast(`${client.name} añadido al pipeline`);
+    this.renderShell(); this.render();
   },
 
   autoBackup() {
@@ -729,10 +776,8 @@ const App = {
     const c = this.store.clients.find(x => x.id === id);
     if (!c || c.stage !== 'contactado') return;
     const code = await this.claude.generateAppCode(c);
-    if (!this.autoMode) {
-      const confirmed = await this.confirmSend(c, code);
-      if (!confirmed) return;
-    }
+    const confirmed = await this.confirmSend(c, code);
+    if (!confirmed) return;
     const result = this.pipeline.sendDemo(id, code);
     if (!result) return;
     const { app } = result;
@@ -870,34 +915,6 @@ const App = {
         msg.textContent = 'No se pudo contactar con el backend';
       }
     };
-  },
-
-  async runSalesCycle() {
-    const advanced = this.pipeline.runSalesCycle();
-    this.saveLocal();
-    this.renderShell(); this.render();
-    if (!advanced) this.toast('Pipeline completo');
-  },
-
-  async analyzeInvestment() {
-    const { amt } = this.pipeline.analyzeInvestment();
-    this.saveLocal();
-    if (this.cloud.connected) this.cloud.insert('opportunities', this.store.opportunities[0]);
-    this.toast(`€${amt}`);
-    this.render();
-  },
-
-  toggleAuto() {
-    this.autoMode = !this.autoMode;
-    document.getElementById('autoBtn').innerHTML = `${this.autoMode ? '<span class="live-dot"></span>' : Icons.svg('activity', 13)} Auto: ${this.autoMode ? 'ON' : 'OFF'}`;
-    if (this.autoMode) this.runAuto();
-  },
-
-  async runAuto() {
-    if (!this.autoMode) return;
-    await this.runSalesCycle();
-    if (Math.random() > 0.6) await this.analyzeInvestment();
-    setTimeout(() => this.runAuto(), 25000);
   },
 
   forceHealing() {

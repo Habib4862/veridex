@@ -4,13 +4,14 @@
  * para esta comprobación puntual contra el servicio externo; el backend
  * no la persiste en ningún sitio.
  *
- * Nota de honestidad: Resend, Anthropic, Stripe, Meta, TikTok, LinkedIn, X y
- * GA4 se verifican aquí porque sus APIs bloquean llamadas directas desde el
- * navegador (CORS), o (en el caso de GA4) requieren un intercambio OAuth2
- * de cuenta de servicio que no puede hacerse desde el navegador. Supabase
- * se verifica directamente desde el frontend (su API REST sí permite
- * CORS). Google Ads usa OAuth2 con varias credenciales en vez de una sola
- * clave, así que no tiene verificación en vivo implementada aquí.
+ * Nota de honestidad: Resend, Anthropic, Stripe, Meta, TikTok, LinkedIn, X,
+ * GA4 y Google Places se verifican aquí porque sus APIs bloquean llamadas
+ * directas desde el navegador (CORS), o (en el caso de GA4) requieren un
+ * intercambio OAuth2 de cuenta de servicio que no puede hacerse desde el
+ * navegador. Supabase se verifica directamente desde el frontend (su API
+ * REST sí permite CORS). Google Ads usa OAuth2 con varias credenciales en
+ * vez de una sola clave, así que no tiene verificación en vivo implementada
+ * aquí.
  */
 const express = require('express');
 const crypto = require('crypto');
@@ -95,6 +96,20 @@ router.post('/test', async (req, res) => {
       if (r.status === 401) return res.json({ ok: false, error: 'Clave inválida' });
       if (!r.ok) return res.json({ ok: false, error: `X respondió ${r.status}` });
       return res.json({ ok: true, detail: 'acceso confirmado a la API de X' });
+    }
+
+    if (service === 'google_places') {
+      const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': key, 'X-Goog-FieldMask': 'places.id' },
+        body: JSON.stringify({ textQuery: 'negocio en Madrid', languageCode: 'es' })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.status === 401 || r.status === 403 || data.error?.status === 'PERMISSION_DENIED') {
+        return res.json({ ok: false, error: 'Clave inválida o sin permisos (activa "Places API (New)" en Google Cloud Console)' });
+      }
+      if (!r.ok) return res.json({ ok: false, error: data.error?.message || `Google Places respondió ${r.status}` });
+      return res.json({ ok: true, detail: 'acceso confirmado a la API de Google Places' });
     }
 
     if (service === 'ga4') {

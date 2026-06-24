@@ -6,26 +6,56 @@ const { PipelineManager } = window;
 function makeStore(overrides = {}) {
   return {
     clients: [], opportunities: [], apps: [],
-    portfolio: { total: 25000, cash: 10000, invested: 15000, returns: 0 },
+    portfolio: { total: 0, cash: 0 },
     activeProjectId: 'p1',
     ...overrides
   };
 }
 
-describe('PipelineManager — generación', () => {
-  it('generateClient produces a client in stage "nuevo" tied to the active project', () => {
+describe('PipelineManager — leads reales', () => {
+  it('leadToOpportunity carries the real business data tied to the active project', () => {
     const pm = new PipelineManager(makeStore());
-    const c = pm.generateClient();
-    expect(c.stage).toBe('nuevo');
-    expect(c.project_id).toBe('p1');
-    expect(typeof c.budget).toBe('number');
+    const lead = { name: 'Clínica Dental Sonrisa', address: 'Calle Mayor 1, Madrid', phone: '+34911111111', website: 'https://sonrisa.es', placeId: 'abc123' };
+    const opp = pm.leadToOpportunity(lead, 'Salud', 'Web');
+    expect(opp.name).toBe('Clínica Dental Sonrisa');
+    expect(opp.address).toBe('Calle Mayor 1, Madrid');
+    expect(opp.sector).toBe('Salud');
+    expect(opp.need).toBe('Web');
+    expect(opp.project_id).toBe('p1');
   });
 
-  it('generateOpp produces an opportunity with investment and monthlyProfit', () => {
+  it('opportunityToClient produces a client in stage "nuevo" with an estimated budget', () => {
     const pm = new PipelineManager(makeStore());
-    const o = pm.generateOpp();
-    expect(o.investment).toBeGreaterThan(0);
-    expect(o.monthlyProfit).toBeGreaterThan(0);
+    const opp = { name: 'Despacho Legal Ruiz', sector: 'Legaltech', need: 'Ventas', address: 'Gran Vía 5', project_id: 'p1' };
+    const c = pm.opportunityToClient(opp);
+    expect(c.stage).toBe('nuevo');
+    expect(c.name).toBe('Despacho Legal Ruiz');
+    expect(c.project_id).toBe('p1');
+    expect(typeof c.budget).toBe('number');
+    expect(c.budget).toBeGreaterThan(0);
+  });
+
+  it('registerOpportunity adds a real lead to the store and caps the list at 20 entries', () => {
+    const store = makeStore({ opportunities: Array.from({ length: 20 }, (_, i) => ({ id: 'o' + i })) });
+    const pm = new PipelineManager(store);
+    pm.registerOpportunity({ name: 'Nueva Tienda' }, 'Ecommerce', 'Web');
+    expect(store.opportunities).toHaveLength(20);
+    expect(store.opportunities[0].name).toBe('Nueva Tienda');
+  });
+
+  it('convertOpportunity moves a real lead from opportunities into clients', () => {
+    const store = makeStore({ opportunities: [{ id: 'o1', name: 'Clínica X', sector: 'Salud', need: 'Web', project_id: 'p1' }] });
+    const pm = new PipelineManager(store);
+    const client = pm.convertOpportunity('o1');
+    expect(client.name).toBe('Clínica X');
+    expect(client.stage).toBe('nuevo');
+    expect(store.opportunities).toHaveLength(0);
+    expect(store.clients).toHaveLength(1);
+  });
+
+  it('convertOpportunity returns null for an unknown opportunity id', () => {
+    const pm = new PipelineManager(makeStore());
+    expect(pm.convertOpportunity('missing')).toBeNull();
   });
 });
 
@@ -66,29 +96,12 @@ describe('PipelineManager — embudo de ventas', () => {
     expect(pm.completeProduct('c1')).toBeNull();
   });
 
-  it('runSalesCycle advances exactly one client per call and returns false when nothing is left', () => {
+  it('completeProduct only credits money once a client reaches "aprobado" (real payment gate upstream)', () => {
     const store = makeStore({ clients: [{ id: 'c1', name: 'Ana', sector: 'Salud', budget: 1000, stage: 'aprobado' }] });
     const pm = new PipelineManager(store);
-    expect(pm.runSalesCycle()).toBe(true);
+    const before = store.portfolio.cash;
+    pm.completeProduct('c1');
     expect(store.clients[0].stage).toBe('completado');
-    expect(pm.runSalesCycle()).toBe(false);
-  });
-});
-
-describe('PipelineManager — integración de inversión y autoscan', () => {
-  it('autoScan adds an opportunity and caps the list at 20 entries', () => {
-    const store = makeStore({ opportunities: Array.from({ length: 20 }, (_, i) => ({ id: 'o' + i })) });
-    const pm = new PipelineManager(store);
-    pm.autoScan();
-    expect(store.opportunities).toHaveLength(20);
-  });
-
-  it('analyzeInvestment moves money from cash to invested and keeps total consistent', () => {
-    const store = makeStore();
-    const pm = new PipelineManager(store);
-    const { amt } = pm.analyzeInvestment();
-    expect(store.portfolio.cash).toBe(10000 - amt);
-    expect(store.portfolio.invested).toBe(15000 + amt);
-    expect(store.portfolio.total).toBe(store.portfolio.cash + store.portfolio.invested + store.portfolio.returns);
+    expect(store.portfolio.cash).toBe(before + 1000);
   });
 });

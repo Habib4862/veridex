@@ -1,6 +1,10 @@
 /**
- * pipeline.js — Generación de oportunidades/clientes y las 5 etapas del
- * embudo de ventas: nuevo → contactado → demo_enviada → aprobado → completado.
+ * pipeline.js — Convierte negocios reales encontrados (vía Google Places,
+ * ver server/routes/leads.js) en oportunidades y clientes, y gestiona las 5
+ * etapas del embudo de ventas: nuevo → contactado → demo_enviada → aprobado
+ * → completado. completeProduct solo debe invocarse tras confirmar un pago
+ * real de Stripe (ver App.showPaymentModal) — este módulo no genera ni
+ * avanza clientes por sí solo.
  *
  * No toca el DOM ni localStorage directamente: notifica cambios a través
  * de los hooks recibidos en el constructor (inyección de dependencias),
@@ -38,27 +42,34 @@ class PipelineManager {
     return Math.round(raw / 50) * 50;
   }
 
-  generateClient() {
-    const sector = ['Legaltech', 'Ecommerce', 'Salud'][Math.floor(Math.random() * 3)];
-    const need = ['Web', 'Ventas', 'Expandir'][Math.floor(Math.random() * 3)];
+  /** Convierte un negocio real devuelto por la búsqueda de leads (Google Places) en una
+   * oportunidad: un negocio detectado, pendiente de convertirse en cliente del pipeline. */
+  leadToOpportunity(lead, sector, need) {
     return {
-      id: 'c_' + Date.now() + Math.random(),
-      name: ['María García', 'Carlos López', 'Ana Martínez'][Math.floor(Math.random() * 3)],
+      id: 'o_' + Date.now() + Math.random(),
+      name: lead.name,
+      address: lead.address || '',
+      phone: lead.phone || '',
+      website: lead.website || '',
+      placeId: lead.placeId || '',
       sector,
       need,
-      budget: PipelineManager.estimateBudget(need, sector),
-      stage: 'nuevo',
       project_id: this.store.activeProjectId
     };
   }
 
-  generateOpp() {
+  /** Convierte una oportunidad (negocio real ya detectado) en un cliente del pipeline de ventas. */
+  opportunityToClient(opp) {
     return {
-      id: 'o_' + Date.now() + Math.random(),
-      name: `${['SaaS', 'Ecommerce', 'Marketplace'][Math.floor(Math.random() * 3)]}: ${['IA', 'eco', 'premium'][Math.floor(Math.random() * 3)]}`,
-      investment: Math.floor(Math.random() * 50000) + 5000,
-      monthlyProfit: Math.floor(Math.random() * 8000) + 1000,
-      risk: ['Bajo', 'Medio', 'Alto'][Math.floor(Math.random() * 3)],
+      id: 'c_' + Date.now() + Math.random(),
+      name: opp.name,
+      sector: opp.sector,
+      need: opp.need,
+      address: opp.address || '',
+      phone: opp.phone || '',
+      website: opp.website || '',
+      budget: PipelineManager.estimateBudget(opp.need, opp.sector),
+      stage: 'nuevo',
       project_id: this.store.activeProjectId
     };
   }
@@ -108,55 +119,29 @@ class PipelineManager {
     return c;
   }
 
-  /** Avanza al primer cliente disponible en cada etapa, en orden. @returns {boolean} true si avanzó algo */
-  runSalesCycle() {
-    const order = ['nuevo', 'contactado', 'demo_enviada', 'aprobado'];
-    for (const stage of order) {
-      const c = this.store.clients.find(x => x.stage === stage);
-      if (!c) continue;
-      if (stage === 'nuevo') this.contactClient(c.id);
-      else if (stage === 'contactado') this.sendDemo(c.id);
-      else if (stage === 'demo_enviada') this.approveClient(c.id);
-      else if (stage === 'aprobado') this.completeProduct(c.id);
-      return true;
-    }
-    return false;
-  }
-
-  autoScan() {
-    const opp = this.generateOpp();
+  /** Registra un negocio real recién encontrado como oportunidad, otorgando XP al
+   * agente de detección. Llamado por App tras una búsqueda de leads exitosa. */
+  registerOpportunity(lead, sector, need) {
+    const opp = this.leadToOpportunity(lead, sector, need);
     this.store.opportunities.unshift(opp);
     if (this.store.opportunities.length > 20) this.store.opportunities.pop();
     this._xp('oportunidad', 5);
-    this._log('Oportunidad detectada');
+    this._log(`Negocio real detectado: ${opp.name}`);
     return opp;
   }
 
-  autoFindClients() {
-    const client = this.generateClient();
+  /** Convierte una oportunidad ya detectada en cliente del pipeline, moviéndola de
+   * store.opportunities a store.clients. Llamado por App cuando el usuario decide
+   * contactar a un negocio real concreto. */
+  convertOpportunity(opportunityId) {
+    const opp = this.store.opportunities.find(o => o.id === opportunityId);
+    if (!opp) return null;
+    const client = this.opportunityToClient(opp);
     this.store.clients.unshift(client);
-    if (this.store.clients.length > 15) this.store.clients.pop();
+    this.store.opportunities = this.store.opportunities.filter(o => o.id !== opportunityId);
     this._xp('marketing', 5);
-    this._log('Cliente detectado');
+    this._log(`${client.name} añadido al pipeline`);
     return client;
-  }
-
-  updateInvestments() {
-    const p = this.store.portfolio;
-    p.returns = (p.returns || 0) + Math.floor(Math.random() * 50) - 10;
-    p.total = (p.cash || 0) + (p.invested || 0) + p.returns;
-  }
-
-  analyzeInvestment() {
-    const opp = this.generateOpp();
-    this.store.opportunities.unshift(opp);
-    const amt = Math.floor(Math.random() * 3000) + 1000;
-    this.store.portfolio.invested += amt;
-    this.store.portfolio.cash -= amt;
-    this.store.portfolio.total = this.store.portfolio.cash + this.store.portfolio.invested + (this.store.portfolio.returns || 0);
-    this._xp('finanzas', 8);
-    this._log(`€${amt} invertido`);
-    return { opp, amt };
   }
 }
 
